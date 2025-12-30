@@ -1,0 +1,6 @@
+venv\scripts\activate
+
+
+//compile
+
+pyinstaller main.spec
