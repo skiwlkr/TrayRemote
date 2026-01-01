@@ -2,6 +2,7 @@
 
 A small desktop app to discover and control Sonos speakers on your local network. Provides playback and volume controls, grouping, and a tray/menubar interface for quick access.
 
+<img src="screenshots/TrayRemote_v1.png" alt="drawing" width="300"/>
 
 Features
 - Discover Sonos devices automatically.
