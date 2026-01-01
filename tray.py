@@ -54,7 +54,7 @@ class SonosTrayApp(ctk.CTk):
 
         self.overrideredirect(True)
         self.attributes('-topmost', True)
-        self.attributes('-alpha', 0.0) # Kurz unsichtbar machen für den Wechsel
+        self.attributes('-alpha', 0.0)
         self.after(0, lambda: self.wm_attributes("-toolwindow", True))
         self.after(10, lambda: self.attributes('-alpha', 1.0))
         self.wm_attributes("-transparentcolor", "#000001")
