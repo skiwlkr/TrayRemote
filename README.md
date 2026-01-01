@@ -1,4 +1,4 @@
-# Sonos-Control
+# TrayRemote
 
 A small desktop app to discover and control Sonos speakers on your local network. Provides playback and volume controls, grouping, and a tray/menubar interface for quick access.
 
