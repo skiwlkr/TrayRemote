@@ -1,3 +1,4 @@
+# sonos_controller.py - v1.1.0
 import soco
 import xml.etree.ElementTree as ET
 
