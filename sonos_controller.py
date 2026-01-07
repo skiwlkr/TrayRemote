@@ -45,27 +45,46 @@ class SonosController:
         try:
             favs = self.device.music_library.get_sonos_favorites()
             favorite_list = []
+            
             for fav in favs:
-                # Safe access to metadata
-                meta = getattr(fav, 'metadata', "")
+                title = getattr(fav, 'title', 'Unknown')
                 album_art = None
                 
-                if meta:
-                    try:
-                        root = ET.fromstring(meta)
-                        ns = {'upnp': 'urn:schemas-upnp-org:metadata-1-0/upnp/'}
-                        art_tag = root.find('.//upnp:albumArtURI', ns)
-                        if art_tag is not None:
-                            album_art = art_tag.text
-                    except: pass
+                # WICHTIG: Prüfe zuerst das direkte album_art_uri Attribut (für Radiostationen)
+                if hasattr(fav, 'album_art_uri'):
+                    album_art = fav.album_art_uri
+                    print(f"[FAV] {title} - Album Art (direkt): {album_art}")
+                
+                # Fallback: Versuche es aus den Metadaten zu holen (für andere Favoriten)
+                if not album_art:
+                    meta = getattr(fav, 'metadata', "")
+                    if meta:
+                        try:
+                            root = ET.fromstring(meta)
+                            ns = {'upnp': 'urn:schemas-upnp-org:metadata-1-0/upnp/'}
+                            art_tag = root.find('.//upnp:albumArtURI', ns)
+                            
+                            if art_tag is None:
+                                art_tag = root.find('.//*[local-name()="albumArtURI"]')
+                            
+                            if art_tag is not None:
+                                album_art = art_tag.text
+                                print(f"[FAV] {title} - Album Art (aus Metadata): {album_art}")
+                        except:
+                            pass
+                
+                if not album_art:
+                    print(f"[FAV] {title} - Keine Album Art gefunden")
 
                 favorite_list.append({
-                    "title": getattr(fav, 'title', 'Unknown'),
+                    "title": title,
                     "uri": fav.get_uri() if hasattr(fav, 'get_uri') else getattr(fav, 'uri', ""),
-                    "meta": meta,
+                    "meta": getattr(fav, 'metadata', ""),
                     "album_art": album_art
                 })
+            
             return favorite_list
+            
         except Exception as e:
             print(f"Error loading favorites: {e}")
             return []

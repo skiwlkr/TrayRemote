@@ -190,26 +190,78 @@ class SonosTrayApp(ctk.CTk):
             print(f"Error loading UI favs: {e}")
 
     def load_fav_art(self, button_widget, url):
+        if not url:
+            return
+        
         try:
             # Construct full URL for relative paths
             if url.startswith('/'):
                 coord = self.controller.get_current_coordinator()
                 if coord:
                     url = f"http://{coord.ip_address}:1400{url}"
+                else:
+                    return
             
-            resp = requests.get(url, timeout=2)
-            img = Image.open(io.BytesIO(resp.content)).resize((35, 35), Image.Resampling.LANCZOS)
-            ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(35, 35))
+            print(f"[COVER] Lade: {url}")
             
-            # Store reference to avoid garbage collection
-            button_widget._image_ref = ctk_img
-            self.after(0, lambda: button_widget.configure(image=ctk_img))
-        except:
-            pass
+            # Headers um als normaler Browser zu erscheinen (verhindert 451 Fehler)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Referer': 'https://mytuner-radio.com/',
+                'Connection': 'keep-alive',
+                'Sec-Fetch-Dest': 'image',
+                'Sec-Fetch-Mode': 'no-cors',
+                'Sec-Fetch-Site': 'cross-site'
+            }
+            
+            # Folge Redirects und lade das Bild mit Browser-Headers
+            resp = requests.get(url, timeout=5, allow_redirects=True, headers=headers)
+            
+            print(f"[COVER] Status: {resp.status_code}, Content-Type: {resp.headers.get('content-type')}, Size: {len(resp.content)} bytes")
+            
+            # Prüfe ob wir wirklich Bilddaten haben
+            if resp.status_code != 200:
+                print(f"[COVER] ✗ HTTP Fehler: {resp.status_code}")
+                return
+            
+            if len(resp.content) < 100:
+                print(f"[COVER] ✗ Content zu klein (wahrscheinlich kein Bild)")
+                return
+            
+            # Versuche das Bild zu öffnen
+            try:
+                img = Image.open(io.BytesIO(resp.content))
+                print(f"[COVER] Bild-Info: Format={img.format}, Mode={img.mode}, Size={img.size}")
+                
+                # Konvertiere zu RGB falls nötig
+                if img.mode not in ('RGB', 'RGBA'):
+                    print(f"[COVER] Konvertiere von {img.mode} zu RGB")
+                    img = img.convert('RGB')
+                
+                img = img.resize((35, 35), Image.Resampling.LANCZOS)
+                ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(35, 35))
+                
+                # Store reference to avoid garbage collection
+                button_widget._image_ref = ctk_img
+                self.after(0, lambda: button_widget.configure(image=ctk_img))
+                
+                print(f"[COVER] ✓ Erfolgreich geladen!")
+                
+            except Exception as img_error:
+                print(f"[COVER] ✗ Bild-Parse-Fehler: {img_error}")
+            
+        except requests.exceptions.RequestException as e:
+            print(f"[COVER] ✗ Request-Fehler: {e}")
+        except Exception as e:
+            print(f"[COVER] ✗ Allgemeiner Fehler: {type(e).__name__} - {e}")
 
     def play_favorite_action(self, fav):
         threading.Thread(target=lambda: self.controller.play_favorite(fav, self.selected_group_uid), daemon=True).start()
         self.tab_view.set("Control")
+        self.after(50, self.update_window_height)
 
     def setup_controls(self, parent):
         box = ctk.CTkFrame(parent, fg_color="transparent")
@@ -327,16 +379,53 @@ class SonosTrayApp(ctk.CTk):
 
     def load_art(self, url, coord):
         try:
+            if not url:
+                print("[MAIN COVER] Keine URL vorhanden")
+                return
+                
             if url.startswith('/'):
                 url = f"http://{coord.ip_address}:1400{url}"
-            resp = requests.get(url, timeout=3)
-            img = Image.open(io.BytesIO(resp.content)).resize((90, 90), Image.Resampling.LANCZOS)
+            
+            print(f"[MAIN COVER] Lade: {url}")
+            
+            # Browser-Headers um 451-Fehler zu vermeiden (wie bei Favoriten)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                'Accept-Language': 'de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Referer': 'https://mytuner-radio.com/',
+                'Connection': 'keep-alive',
+                'Sec-Fetch-Dest': 'image',
+                'Sec-Fetch-Mode': 'no-cors',
+                'Sec-Fetch-Site': 'cross-site'
+            }
+            
+            resp = requests.get(url, timeout=5, headers=headers, allow_redirects=True)
+            
+            print(f"[MAIN COVER] Status: {resp.status_code}, Size: {len(resp.content)} bytes")
+            
+            if resp.status_code != 200:
+                print(f"[MAIN COVER] ✗ HTTP Fehler: {resp.status_code}")
+                return
+            
+            img = Image.open(io.BytesIO(resp.content))
+            print(f"[MAIN COVER] Bild-Info: Format={img.format}, Size={img.size}")
+            
+            # Konvertiere zu RGB falls nötig
+            if img.mode not in ('RGB', 'RGBA'):
+                img = img.convert('RGB')
+            
+            img = img.resize((90, 90), Image.Resampling.LANCZOS)
             ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(90, 90))
             
             self.after(0, lambda: self.cover_label.configure(image=ctk_img))
-            self._current_cover = ctk_img # Hold reference
+            self._current_cover = ctk_img  # Hold reference
+            
+            print(f"[MAIN COVER] ✓ Erfolgreich geladen!")
+            
         except Exception as e:
-            print(f"Error loading album art: {e}")
+            print(f"[MAIN COVER] ✗ Error: {type(e).__name__} - {e}")
 
     def control_action(self, a):
         if a == "play": self.play_btn.configure(fg_color=ACTIVE_BLUE)
