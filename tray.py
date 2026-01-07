@@ -44,6 +44,10 @@ class SonosTrayApp(ctk.CTk):
         self.room_vol_widgets = {}
         self.room_select_widgets = {}
         self.current_album_url = ""
+        self.current_favorite_cover = None
+        self.current_track_title = ""
+        self.favorite_covers = {}
+        self.current_album_url = ""
         self.selected_group_uid = None 
         self._current_cover = None # Reference to prevent garbage collection
         
@@ -158,6 +162,10 @@ class SonosTrayApp(ctk.CTk):
             # Get favorites in background
             favs = self.controller.get_favorites()
             
+            # Cache die Cover-URLs für Fallback bei Radiostationen
+            self.favorite_covers = {fav['title']: fav['album_art'] for fav in favs if fav.get('album_art')}
+            print(f"[FAV CACHE] {len(self.favorite_covers)} Cover gespeichert")
+            
             def update_ui():
                 # Clear previous widgets
                 for widget in self.fav_list_frame.winfo_children():
@@ -259,6 +267,10 @@ class SonosTrayApp(ctk.CTk):
             print(f"[COVER] ✗ Allgemeiner Fehler: {type(e).__name__} - {e}")
 
     def play_favorite_action(self, fav):
+        # Speichere das Cover des Favoriten
+        self.current_favorite_cover = fav.get('album_art')
+        print(f"[FAV] Spiele {fav.get('title')} - Cover gespeichert: {self.current_favorite_cover}")
+        
         threading.Thread(target=lambda: self.controller.play_favorite(fav, self.selected_group_uid), daemon=True).start()
         self.tab_view.set("Control")
         self.after(50, self.update_window_height)
@@ -353,13 +365,31 @@ class SonosTrayApp(ctk.CTk):
                 self.shuffle_btn.configure(text_color=ACTIVE_BLUE if "SHUFFLE" in pm else "#FFFFFF")
                 self.repeat_btn.configure(text_color=ACTIVE_BLUE if pm in ["SHUFFLE", "REPEAT_ALL", "REPEAT_ONE"] else "#FFFFFF")
                 if len(self.room_vol_widgets) != len(active_g.members): self.rebuild_dynamic_sections()
+                
                 track = active_g.coordinator.get_current_track_info()
-                self.track_label.configure(text=track.get('title', 'Unknown'))
+                track_title = track.get('title', 'Unknown')
+                track_uri = track.get('uri', '')
+                
+                self.track_label.configure(text=track_title)
                 self.artist_label.configure(text=self.get_all_artists(track))
+                
+                # Hole Album Art URL
                 url = track.get('album_art')
+                
+                # Prüfe ob es ein Radio-Stream ist
+                is_radio = 'x-sonosapi-stream' in track_uri or 'x-rincon-mp3radio' in track_uri or 'x-rincon-mp3' in track_uri
+                
+                # Bei Radio: Verwende das gespeicherte Favoriten-Cover
+                if is_radio and not url and self.current_favorite_cover:
+                    url = self.current_favorite_cover
+                    ## print(f"[COVER] Verwende gespeichertes Favoriten-Cover für Radio")
+                
+                # Cover laden wenn URL vorhanden und sich geändert hat
                 if url and url != self.current_album_url:
+                    print(f"[UPDATE] Cover wird geladen")
                     self.current_album_url = url
                     threading.Thread(target=self.load_art, args=(url, active_g.coordinator), daemon=True).start()
+                
                 for name, w in self.room_vol_widgets.items():
                     p_fresh = next((m for m in active_g.members if m.player_name == name), w["player"])
                     w["slider"].set(p_fresh.volume); w["mute_btn"].configure(text_color=MUTE_RED if p_fresh.mute else "#FFFFFF")
