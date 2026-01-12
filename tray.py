@@ -1,4 +1,4 @@
-# tray.py - v1.1.0
+# tray.py - v1.1.1 (English Translation)
 import threading
 import pystray
 from pystray import MenuItem as item
@@ -139,11 +139,8 @@ class SonosTrayApp(ctk.CTk):
         self.fav_container = ctk.CTkFrame(self.tab_view.tab("Favorites"), fg_color="transparent")
         self.fav_container.pack(fill="both", expand=True)
         
-        self.refresh_fav_btn = ctk.CTkButton(self.fav_container, text="Reload Favorites", 
-                                             fg_color=BTN_DEFAULT, hover_color=ACTIVE_BLUE, height=24,
-                                             command=self.load_favorites_ui)
-        self.refresh_fav_btn.pack(pady=(0, 10), fill="x")
-
+        # Button was removed here
+        
         self.fav_list_frame = ctk.CTkFrame(self.fav_container, fg_color="transparent")
         self.fav_list_frame.pack(fill="x")
         
@@ -162,9 +159,9 @@ class SonosTrayApp(ctk.CTk):
             # Get favorites in background
             favs = self.controller.get_favorites()
             
-            # Cache die Cover-URLs für Fallback bei Radiostationen
+            # Cache cover URLs for fallback with radio stations
             self.favorite_covers = {fav['title']: fav['album_art'] for fav in favs if fav.get('album_art')}
-            print(f"[FAV CACHE] {len(self.favorite_covers)} Cover gespeichert")
+            print(f"[FAV CACHE] {len(self.favorite_covers)} covers saved")
             
             def update_ui():
                 # Clear previous widgets
@@ -210,9 +207,9 @@ class SonosTrayApp(ctk.CTk):
                 else:
                     return
             
-            print(f"[COVER] Lade: {url}")
+            print(f"[COVER] Loading: {url}")
             
-            # Headers um als normaler Browser zu erscheinen (verhindert 451 Fehler)
+            # Headers to appear as a normal browser (prevents 451 errors)
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
@@ -225,28 +222,28 @@ class SonosTrayApp(ctk.CTk):
                 'Sec-Fetch-Site': 'cross-site'
             }
             
-            # Folge Redirects und lade das Bild mit Browser-Headers
+            # Follow redirects and load image with browser headers
             resp = requests.get(url, timeout=5, allow_redirects=True, headers=headers)
             
             print(f"[COVER] Status: {resp.status_code}, Content-Type: {resp.headers.get('content-type')}, Size: {len(resp.content)} bytes")
             
-            # Prüfe ob wir wirklich Bilddaten haben
+            # Check if we really have image data
             if resp.status_code != 200:
-                print(f"[COVER] ✗ HTTP Fehler: {resp.status_code}")
+                print(f"[COVER] ✗ HTTP Error: {resp.status_code}")
                 return
             
             if len(resp.content) < 100:
-                print(f"[COVER] ✗ Content zu klein (wahrscheinlich kein Bild)")
+                print(f"[COVER] ✗ Content too small (probably no image)")
                 return
             
-            # Versuche das Bild zu öffnen
+            # Attempt to open the image
             try:
                 img = Image.open(io.BytesIO(resp.content))
-                print(f"[COVER] Bild-Info: Format={img.format}, Mode={img.mode}, Size={img.size}")
+                print(f"[COVER] Image Info: Format={img.format}, Mode={img.mode}, Size={img.size}")
                 
-                # Konvertiere zu RGB falls nötig
+                # Convert to RGB if necessary
                 if img.mode not in ('RGB', 'RGBA'):
-                    print(f"[COVER] Konvertiere von {img.mode} zu RGB")
+                    print(f"[COVER] Converting from {img.mode} to RGB")
                     img = img.convert('RGB')
                 
                 img = img.resize((35, 35), Image.Resampling.LANCZOS)
@@ -256,20 +253,20 @@ class SonosTrayApp(ctk.CTk):
                 button_widget._image_ref = ctk_img
                 self.after(0, lambda: button_widget.configure(image=ctk_img))
                 
-                print(f"[COVER] ✓ Erfolgreich geladen!")
+                print(f"[COVER] ✓ Successfully loaded!")
                 
             except Exception as img_error:
-                print(f"[COVER] ✗ Bild-Parse-Fehler: {img_error}")
+                print(f"[COVER] ✗ Image parse error: {img_error}")
             
         except requests.exceptions.RequestException as e:
-            print(f"[COVER] ✗ Request-Fehler: {e}")
+            print(f"[COVER] ✗ Request error: {e}")
         except Exception as e:
-            print(f"[COVER] ✗ Allgemeiner Fehler: {type(e).__name__} - {e}")
+            print(f"[COVER] ✗ General error: {type(e).__name__} - {e}")
 
     def play_favorite_action(self, fav):
-        # Speichere das Cover des Favoriten
+        # Save the favorite's cover
         self.current_favorite_cover = fav.get('album_art')
-        print(f"[FAV] Spiele {fav.get('title')} - Cover gespeichert: {self.current_favorite_cover}")
+        print(f"[FAV] Playing {fav.get('title')} - Cover saved: {self.current_favorite_cover}")
         
         threading.Thread(target=lambda: self.controller.play_favorite(fav, self.selected_group_uid), daemon=True).start()
         self.tab_view.set("Control")
@@ -373,20 +370,20 @@ class SonosTrayApp(ctk.CTk):
                 self.track_label.configure(text=track_title)
                 self.artist_label.configure(text=self.get_all_artists(track))
                 
-                # Hole Album Art URL
+                # Get Album Art URL
                 url = track.get('album_art')
                 
-                # Prüfe ob es ein Radio-Stream ist
+                # Check if it is a radio stream
                 is_radio = 'x-sonosapi-stream' in track_uri or 'x-rincon-mp3radio' in track_uri or 'x-rincon-mp3' in track_uri
                 
-                # Bei Radio: Verwende das gespeicherte Favoriten-Cover
+                # For Radio: Use stored favorite cover
                 if is_radio and not url and self.current_favorite_cover:
                     url = self.current_favorite_cover
-                    ## print(f"[COVER] Verwende gespeichertes Favoriten-Cover für Radio")
+                    ## print(f"[COVER] Using stored favorite cover for radio")
                 
-                # Cover laden wenn URL vorhanden und sich geändert hat
+                # Load cover if URL exists and has changed
                 if url and url != self.current_album_url:
-                    print(f"[UPDATE] Cover wird geladen")
+                    print(f"[UPDATE] Loading cover")
                     self.current_album_url = url
                     threading.Thread(target=self.load_art, args=(url, active_g.coordinator), daemon=True).start()
                 
@@ -410,15 +407,15 @@ class SonosTrayApp(ctk.CTk):
     def load_art(self, url, coord):
         try:
             if not url:
-                print("[MAIN COVER] Keine URL vorhanden")
+                print("[MAIN COVER] No URL available")
                 return
                 
             if url.startswith('/'):
                 url = f"http://{coord.ip_address}:1400{url}"
             
-            print(f"[MAIN COVER] Lade: {url}")
+            print(f"[MAIN COVER] Loading: {url}")
             
-            # Browser-Headers um 451-Fehler zu vermeiden (wie bei Favoriten)
+            # Browser headers to avoid 451 errors (same as favorites)
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
@@ -436,13 +433,13 @@ class SonosTrayApp(ctk.CTk):
             print(f"[MAIN COVER] Status: {resp.status_code}, Size: {len(resp.content)} bytes")
             
             if resp.status_code != 200:
-                print(f"[MAIN COVER] ✗ HTTP Fehler: {resp.status_code}")
+                print(f"[MAIN COVER] ✗ HTTP Error: {resp.status_code}")
                 return
             
             img = Image.open(io.BytesIO(resp.content))
-            print(f"[MAIN COVER] Bild-Info: Format={img.format}, Size={img.size}")
+            print(f"[MAIN COVER] Image Info: Format={img.format}, Size={img.size}")
             
-            # Konvertiere zu RGB falls nötig
+            # Convert to RGB if necessary
             if img.mode not in ('RGB', 'RGBA'):
                 img = img.convert('RGB')
             
@@ -452,7 +449,7 @@ class SonosTrayApp(ctk.CTk):
             self.after(0, lambda: self.cover_label.configure(image=ctk_img))
             self._current_cover = ctk_img  # Hold reference
             
-            print(f"[MAIN COVER] ✓ Erfolgreich geladen!")
+            print(f"[MAIN COVER] ✓ Successfully loaded!")
             
         except Exception as e:
             print(f"[MAIN COVER] ✗ Error: {type(e).__name__} - {e}")

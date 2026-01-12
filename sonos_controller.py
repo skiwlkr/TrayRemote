@@ -1,4 +1,3 @@
-# sonos_controller.py - v1.1.0
 import soco
 import xml.etree.ElementTree as ET
 
@@ -51,12 +50,12 @@ class SonosController:
                 title = getattr(fav, 'title', 'Unknown')
                 album_art = None
                 
-                # WICHTIG: Prüfe zuerst das direkte album_art_uri Attribut (für Radiostationen)
+                # IMPORTANT: Check direct album_art_uri attribute first (for radio stations)
                 if hasattr(fav, 'album_art_uri'):
                     album_art = fav.album_art_uri
-                    print(f"[FAV] {title} - Album Art (direkt): {album_art}")
+                    print(f"[FAV] {title} - Album Art (direct): {album_art}")
                 
-                # Fallback: Versuche es aus den Metadaten zu holen (für andere Favoriten)
+                # Fallback: Try to get it from metadata (for other favorites)
                 if not album_art:
                     meta = getattr(fav, 'metadata', "")
                     if meta:
@@ -70,12 +69,12 @@ class SonosController:
                             
                             if art_tag is not None:
                                 album_art = art_tag.text
-                                print(f"[FAV] {title} - Album Art (aus Metadata): {album_art}")
+                                print(f"[FAV] {title} - Album Art (from Metadata): {album_art}")
                         except:
                             pass
                 
                 if not album_art:
-                    print(f"[FAV] {title} - Keine Album Art gefunden")
+                    print(f"[FAV] {title} - No album art found")
 
                 favorite_list.append({
                     "title": title,
