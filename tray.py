@@ -139,7 +139,12 @@ class SonosTrayApp(ctk.CTk):
         self.fav_container = ctk.CTkFrame(self.tab_view.tab("Favorites"), fg_color="transparent")
         self.fav_container.pack(fill="both", expand=True)
         
-        # Button was removed here
+        # Refresh Button
+        self.fav_header = ctk.CTkFrame(self.fav_container, fg_color="transparent")
+        self.fav_header.pack(fill="x", pady=(0, 5))
+        ctk.CTkButton(self.fav_header, text="🔄 REFRESH FAVORITES", font=ctk.CTkFont(size=10, weight="bold"), 
+                      height=28, fg_color=BTN_DEFAULT, hover_color=ACTIVE_BLUE,
+                      command=lambda: threading.Thread(target=self.load_favorites_ui, daemon=True).start()).pack(fill="x")
         
         self.fav_list_frame = ctk.CTkFrame(self.fav_container, fg_color="transparent")
         self.fav_list_frame.pack(fill="x")
@@ -153,12 +158,19 @@ class SonosTrayApp(ctk.CTk):
     def create_card(self, parent):
         return ctk.CTkFrame(parent, fg_color=CARD_BG, corner_radius=CORNER_RADIUS_INNER, border_width=1, border_color=CARD_BORDER)
 
-    def load_favorites_ui(self):
+    def load_favorites_ui(self, retry_count=0):
         """Fetches favorites and refreshes the UI."""
         try:
             # Get favorites in background
             favs = self.controller.get_favorites()
             
+            # If no favorites found and we haven't retried much, try again after a short delay
+            # This helps if discovery is still in progress
+            if not favs and retry_count < 2:
+                print(f"[FAV] No favorites found, retrying... ({retry_count + 1}/2)")
+                self.after(2000, lambda: threading.Thread(target=self.load_favorites_ui, args=(retry_count + 1,), daemon=True).start())
+                return
+
             # Cache cover URLs for fallback with radio stations
             self.favorite_covers = {fav['title']: fav['album_art'] for fav in favs if fav.get('album_art')}
             print(f"[FAV CACHE] {len(self.favorite_covers)} covers saved")
@@ -179,9 +191,10 @@ class SonosTrayApp(ctk.CTk):
                             f_frame, text=fav.get('title', 'Unknown'), anchor="w",
                             fg_color=CARD_BG, hover_color=ACTIVE_BLUE, height=45,
                             border_width=1, border_color=CARD_BORDER,
+                            compound="left",
                             command=lambda f=fav: self.play_favorite_action(f)
                         )
-                        btn.pack(fill="x")
+                        btn.pack(fill="x", padx=10)
                         
                         # Load cover art
                         if fav.get('album_art'):
@@ -377,15 +390,22 @@ class SonosTrayApp(ctk.CTk):
                 is_radio = 'x-sonosapi-stream' in track_uri or 'x-rincon-mp3radio' in track_uri or 'x-rincon-mp3' in track_uri
                 
                 # For Radio: Use stored favorite cover
-                if is_radio and not url and self.current_favorite_cover:
-                    url = self.current_favorite_cover
-                    ## print(f"[COVER] Using stored favorite cover for radio")
+                if is_radio and not url:
+                    if self.current_favorite_cover:
+                        url = self.current_favorite_cover
+                    elif track_title in self.favorite_covers:
+                        url = self.favorite_covers[track_title]
                 
                 # Load cover if URL exists and has changed
-                if url and url != self.current_album_url:
-                    print(f"[UPDATE] Loading cover")
+                if url != self.current_album_url:
                     self.current_album_url = url
-                    threading.Thread(target=self.load_art, args=(url, active_g.coordinator), daemon=True).start()
+                    if url:
+                        print(f"[UPDATE] Loading cover: {url}")
+                        threading.Thread(target=self.load_art, args=(url, active_g.coordinator), daemon=True).start()
+                    else:
+                        print(f"[UPDATE] No cover available, clearing")
+                        self.after(0, lambda: self.cover_label.configure(image=None))
+                        self._current_cover = None
                 
                 for name, w in self.room_vol_widgets.items():
                     p_fresh = next((m for m in active_g.members if m.player_name == name), w["player"])
