@@ -47,9 +47,11 @@ class SonosTrayApp(ctk.CTk):
         self.current_favorite_cover = None
         self.current_track_title = ""
         self.favorite_covers = {}
+        self._img_cache = {} # title -> CTkImage (Persistent cache to prevent GC)
         self.current_album_url = ""
         self.selected_group_uid = None 
         self._current_cover = None # Reference to prevent garbage collection
+        self._loading_favs = False
         
         try:
             self.controller = SonosController()
@@ -142,15 +144,21 @@ class SonosTrayApp(ctk.CTk):
         # Refresh Button
         self.fav_header = ctk.CTkFrame(self.fav_container, fg_color="transparent")
         self.fav_header.pack(fill="x", pady=(0, 5))
-        ctk.CTkButton(self.fav_header, text="🔄 REFRESH FAVORITES", font=ctk.CTkFont(size=10, weight="bold"), 
+        self.refresh_btn = ctk.CTkButton(self.fav_header, text="🔄 REFRESH FAVORITES", font=ctk.CTkFont(size=10, weight="bold"), 
                       height=28, fg_color=BTN_DEFAULT, hover_color=ACTIVE_BLUE,
-                      command=lambda: threading.Thread(target=self.load_favorites_ui, daemon=True).start()).pack(fill="x")
+                      command=self.trigger_refresh)
+        self.refresh_btn.pack(fill="x")
         
         self.fav_list_frame = ctk.CTkFrame(self.fav_container, fg_color="transparent")
         self.fav_list_frame.pack(fill="x")
         
+        self._loading_favs = False
         threading.Thread(target=self.load_favorites_ui, daemon=True).start()
         self.after(100, self.update_status)
+
+    def trigger_refresh(self):
+        if not self._loading_favs:
+            threading.Thread(target=self.load_favorites_ui, daemon=True).start()
 
     def on_tab_change(self):
         self.update_window_height()
@@ -160,54 +168,79 @@ class SonosTrayApp(ctk.CTk):
 
     def load_favorites_ui(self, retry_count=0):
         """Fetches favorites and refreshes the UI."""
+        if self._loading_favs and retry_count == 0:
+            return
+            
+        self._loading_favs = True
+        self.after(0, lambda: self.refresh_btn.configure(text="⏳ LOADING...", state="disabled"))
+        
         try:
             # Get favorites in background
             favs = self.controller.get_favorites()
             
             # If no favorites found and we haven't retried much, try again after a short delay
-            # This helps if discovery is still in progress
             if not favs and retry_count < 2:
                 print(f"[FAV] No favorites found, retrying... ({retry_count + 1}/2)")
                 self.after(2000, lambda: threading.Thread(target=self.load_favorites_ui, args=(retry_count + 1,), daemon=True).start())
                 return
 
-            # Cache cover URLs for fallback with radio stations
-            self.favorite_covers = {fav['title']: fav['album_art'] for fav in favs if fav.get('album_art')}
-            print(f"[FAV CACHE] {len(self.favorite_covers)} covers saved")
+            # Merge cover URLs for fallback with radio stations
+            if favs:
+                new_covers = {fav['title']: fav['album_art'] for fav in favs if fav.get('album_art')}
+                self.favorite_covers.update(new_covers)
+                print(f"[FAV CACHE] Total {len(self.favorite_covers)} covers in cache")
             
             def update_ui():
-                # Clear previous widgets
-                for widget in self.fav_list_frame.winfo_children():
-                    widget.destroy()
-                
-                if not favs:
-                    ctk.CTkLabel(self.fav_list_frame, text="No favorites found.", text_color="gray").pack(pady=10)
-                else:
-                    for fav in favs:
-                        f_frame = ctk.CTkFrame(self.fav_list_frame, fg_color="transparent")
-                        f_frame.pack(fill="x", pady=2)
-                        
-                        btn = ctk.CTkButton(
-                            f_frame, text=fav.get('title', 'Unknown'), anchor="w",
-                            fg_color=CARD_BG, hover_color=ACTIVE_BLUE, height=45,
-                            border_width=1, border_color=CARD_BORDER,
-                            compound="left",
-                            command=lambda f=fav: self.play_favorite_action(f)
-                        )
-                        btn.pack(fill="x", padx=10)
-                        
-                        # Load cover art
-                        if fav.get('album_art'):
-                            threading.Thread(target=self.load_fav_art, args=(btn, fav['album_art']), daemon=True).start()
-                
-                self.fav_list_frame.update()
-                self.update_window_height()
+                try:
+                    # Clear previous widgets
+                    for widget in self.fav_list_frame.winfo_children():
+                        widget.destroy()
+                    
+                    if not favs:
+                        ctk.CTkLabel(self.fav_list_frame, text="No favorites found.", text_color="gray").pack(pady=10)
+                    else:
+                        print(f"[FAV] Rebuilding UI with {len(favs)} favorites")
+                        for fav in favs:
+                            title = fav.get('title', 'Unknown')
+                            f_frame = ctk.CTkFrame(self.fav_list_frame, fg_color="transparent")
+                            f_frame.pack(fill="x", pady=2)
+                            
+                            btn = ctk.CTkButton(
+                                f_frame, text=title, anchor="w",
+                                fg_color=CARD_BG, hover_color=ACTIVE_BLUE, height=45,
+                                border_width=1, border_color=CARD_BORDER,
+                                compound="left",
+                                command=lambda f=fav: self.play_favorite_action(f)
+                            )
+                            btn.pack(fill="x", padx=10)
+                            
+                            # 1. Check if we have the actual Image object in memory for instant display
+                            if title in self._img_cache:
+                                print(f"[FAV] Instant load from memory: {title}")
+                                btn.configure(image=self._img_cache[title])
+                            else:
+                                # 2. Determine cover URL (favor fresh data, fallback to URL cache)
+                                art_url = fav.get('album_art')
+                                if not art_url and title in self.favorite_covers:
+                                    art_url = self.favorite_covers[title]
+                                    
+                                if art_url:
+                                    threading.Thread(target=self.load_fav_art, args=(btn, art_url, title), daemon=True).start()
+                                else:
+                                    print(f"[FAV] No cover URL for {title}")
+                    
+                    self.after(200, self.update_window_height)
+                finally:
+                    self._loading_favs = False
+                    self.refresh_btn.configure(text="🔄 REFRESH FAVORITES", state="normal")
 
             self.after(0, update_ui)
         except Exception as e:
             print(f"Error loading UI favs: {e}")
+            self._loading_favs = False
+            self.after(0, lambda: self.refresh_btn.configure(text="🔄 REFRESH FAVORITES", state="normal"))
 
-    def load_fav_art(self, button_widget, url):
+    def load_fav_art(self, button_widget, url, title):
         if not url:
             return
         
@@ -218,9 +251,10 @@ class SonosTrayApp(ctk.CTk):
                 if coord:
                     url = f"http://{coord.ip_address}:1400{url}"
                 else:
+                    print(f"[COVER] {title} - Coordinator not found for relative URL")
                     return
             
-            print(f"[COVER] Loading: {url}")
+            print(f"[COVER] {title} - Loading: {url}")
             
             # Headers to appear as a normal browser (prevents 451 errors)
             headers = {
@@ -238,43 +272,48 @@ class SonosTrayApp(ctk.CTk):
             # Follow redirects and load image with browser headers
             resp = requests.get(url, timeout=5, allow_redirects=True, headers=headers)
             
-            print(f"[COVER] Status: {resp.status_code}, Content-Type: {resp.headers.get('content-type')}, Size: {len(resp.content)} bytes")
+            print(f"[COVER] {title} - Status: {resp.status_code}, Size: {len(resp.content)} bytes")
             
             # Check if we really have image data
             if resp.status_code != 200:
-                print(f"[COVER] ✗ HTTP Error: {resp.status_code}")
+                print(f"[COVER] {title} - ✗ HTTP Error: {resp.status_code}")
                 return
             
             if len(resp.content) < 100:
-                print(f"[COVER] ✗ Content too small (probably no image)")
+                print(f"[COVER] {title} - ✗ Content too small")
                 return
             
             # Attempt to open the image
             try:
                 img = Image.open(io.BytesIO(resp.content))
-                print(f"[COVER] Image Info: Format={img.format}, Mode={img.mode}, Size={img.size}")
                 
                 # Convert to RGB if necessary
                 if img.mode not in ('RGB', 'RGBA'):
-                    print(f"[COVER] Converting from {img.mode} to RGB")
                     img = img.convert('RGB')
                 
                 img = img.resize((35, 35), Image.Resampling.LANCZOS)
                 ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(35, 35))
                 
-                # Store reference to avoid garbage collection
-                button_widget._image_ref = ctk_img
-                self.after(0, lambda: button_widget.configure(image=ctk_img))
+                # IMPORTANT: Save to persistent cache so it survives UI refresh
+                self._img_cache[title] = ctk_img
                 
-                print(f"[COVER] ✓ Successfully loaded!")
+                # Apply to current widget if it still exists
+                def apply():
+                    if button_widget.winfo_exists():
+                        button_widget.configure(image=ctk_img)
+                        # Reference on widget as extra safety
+                        button_widget._image_ref = ctk_img
+                
+                self.after(0, apply)
+                print(f"[COVER] {title} - ✓ Successfully loaded and cached!")
                 
             except Exception as img_error:
-                print(f"[COVER] ✗ Image parse error: {img_error}")
+                print(f"[COVER] {title} - ✗ Image parse error: {img_error}")
             
         except requests.exceptions.RequestException as e:
-            print(f"[COVER] ✗ Request error: {e}")
+            print(f"[COVER] {title} - ✗ Request error: {e}")
         except Exception as e:
-            print(f"[COVER] ✗ General error: {type(e).__name__} - {e}")
+            print(f"[COVER] {title} - ✗ General error: {type(e).__name__} - {e}")
 
     def play_favorite_action(self, fav):
         # Save the favorite's cover
