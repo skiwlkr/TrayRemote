@@ -182,3 +182,4 @@ cython_debug/
 
 # ignore custom
 /exclude/
+GEMINI.md
