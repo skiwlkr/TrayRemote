@@ -386,7 +386,6 @@ class SonosTrayApp(ctk.CTk):
         
         threading.Thread(target=lambda: self.controller.play_favorite(fav, self.selected_group_uid), daemon=True).start()
         self.show_control()
-        self.after(50, self.update_window_height)
 
     def setup_controls(self, parent):
         box = ctk.CTkFrame(parent, fg_color="transparent")
