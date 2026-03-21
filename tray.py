@@ -354,17 +354,18 @@ class SonosTrayApp(ctk.CTk):
     def setup_controls(self, parent):
         box = ctk.CTkFrame(parent, fg_color="transparent")
         box.pack(pady=8)
-        btn_cfg = {"width": 38, "height": 38, "font": ctk.CTkFont(size=16), "corner_radius": 10}
+        btn_cfg = {"width": 38, "height": 38, "font": ctk.CTkFont(size=16), "corner_radius": 19}
         mode_cfg = {"width": 30, "height": 30, "font": ctk.CTkFont(size=18), "fg_color": "transparent", "hover_color": "#2a2a2b", "text_color": "#FFFFFF"}
+        nav_cfg = {"width": 38, "height": 38, "font": ctk.CTkFont(size=18), "fg_color": "transparent", "hover_color": "#2a2a2b", "text_color": "#FFFFFF"}
 
         self.shuffle_btn = ctk.CTkButton(box, text="🔀", command=lambda: self.control_action("shuffle"), **mode_cfg)
         self.shuffle_btn.pack(side="left", padx=10)
-        ctk.CTkButton(box, text="⏮", command=lambda: self.control_action("previous"), fg_color=BTN_DEFAULT, **btn_cfg).pack(side="left", padx=3)
-        self.play_btn = ctk.CTkButton(box, text="▶", command=lambda: self.control_action("play"), fg_color=BTN_DEFAULT, **btn_cfg)
+        
+        ctk.CTkButton(box, text="⏮", command=lambda: self.control_action("previous"), **nav_cfg).pack(side="left", padx=3)
+        self.play_btn = ctk.CTkButton(box, text="▶", command=lambda: self.control_action("play_pause"), fg_color=BTN_DEFAULT, **btn_cfg)
         self.play_btn.pack(side="left", padx=3)
-        self.pause_btn = ctk.CTkButton(box, text="⏹️", command=lambda: self.control_action("pause"), fg_color=BTN_DEFAULT, **btn_cfg)
-        self.pause_btn.pack(side="left", padx=3)
-        ctk.CTkButton(box, text="⏭", command=lambda: self.control_action("next"), fg_color=BTN_DEFAULT, **btn_cfg).pack(side="left", padx=3)
+        ctk.CTkButton(box, text="⏭", command=lambda: self.control_action("next"), **nav_cfg).pack(side="left", padx=3)
+        
         self.repeat_btn = ctk.CTkButton(box, text="🔁", command=lambda: self.control_action("repeat"), **mode_cfg)
         self.repeat_btn.pack(side="left", padx=10)
 
@@ -436,7 +437,10 @@ class SonosTrayApp(ctk.CTk):
             active_g = next((g for g in groups if g.coordinator.uid == self.selected_group_uid), None)
             if active_g:
                 state = active_g.coordinator.get_current_transport_info().get('current_transport_state', '')
-                self.play_btn.configure(fg_color=ACTIVE_BLUE if state == 'PLAYING' else BTN_DEFAULT)
+                self.play_btn.configure(
+                    fg_color=ACTIVE_BLUE if state == 'PLAYING' else BTN_DEFAULT,
+                    text="⏸" if state == 'PLAYING' else "▶"
+                )
                 pm = active_g.coordinator.play_mode
                 self.shuffle_btn.configure(text_color=ACTIVE_BLUE if "SHUFFLE" in pm else "#FFFFFF")
                 self.repeat_btn.configure(text_color=ACTIVE_BLUE if pm in ["SHUFFLE", "REPEAT_ALL", "REPEAT_ONE"] else "#FFFFFF")
@@ -541,16 +545,16 @@ class SonosTrayApp(ctk.CTk):
             print(f"[MAIN COVER] ✗ Error: {type(e).__name__} - {e}")
 
     def control_action(self, a):
-        if a == "play": self.play_btn.configure(fg_color=ACTIVE_BLUE)
-        elif a == "pause": self.play_btn.configure(fg_color=BTN_DEFAULT)
         def t():
             groups = self.controller.get_all_groups()
             coord = next((g.coordinator for g in groups if g.coordinator.uid == self.selected_group_uid), None)
             if not coord: return
             if a == "next": coord.next()
             elif a == "previous": coord.previous()
-            elif a == "play": coord.play()
-            elif a == "pause": coord.pause()
+            elif a == "play_pause":
+                state = coord.get_current_transport_info().get('current_transport_state', '')
+                if state == 'PLAYING': coord.pause()
+                else: coord.play()
             elif a in ["shuffle", "repeat"]:
                 mode = coord.play_mode
                 s, r = "SHUFFLE" in mode, mode in ["SHUFFLE", "REPEAT_ALL", "REPEAT_ONE"]
