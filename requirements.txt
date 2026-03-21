@@ -3,3 +3,4 @@ pystray
 Pillow
 requests
 soco
+py-window-styles

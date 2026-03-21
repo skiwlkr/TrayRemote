@@ -12,6 +12,7 @@ import os
 import xml.etree.ElementTree as ET
 import ctypes 
 import winreg
+import pywinstyles
 
 # --- DPI SCALE FIX ---
 try:
@@ -29,12 +30,12 @@ ctk.set_default_color_theme("blue")
 WINDOW_WIDTH = 380
 RIGHT_EDGE_OFFSET = 250
 BOTTOM_EDGE_OFFSET = 65
-BG_APP_OUTER = '#121212'
-CARD_BG = '#252527'
-CARD_BORDER = '#3a3a3b'
+BG_APP_OUTER = '#121212' # Darker base for glass tint
+CARD_BG = '#1e1e20'      # Slightly lighter for layered look
+CARD_BORDER = '#444444'  # Brighter border for glass edge effect
 MUTE_RED = '#ff4444' 
 ACTIVE_BLUE = '#3a7ebf' 
-BTN_DEFAULT = '#333335'
+BTN_DEFAULT = '#2d2d30'
 CORNER_RADIUS_OUTER = 20
 CORNER_RADIUS_INNER = 12
 
@@ -59,18 +60,44 @@ class SonosTrayApp(ctk.CTk):
             print(f"Startup Error: {e}")
             sys.exit(1)
 
+        # --- GLASSMORPHISM & STYLE ---
+        # 1. Start with a clean chroma key
+        CHROMA_KEY = "#010101"
+        self.configure(fg_color=CHROMA_KEY)
+        self.wm_attributes("-transparentcolor", CHROMA_KEY)
+        
+        # 2. Set window-level alpha to make ALL widgets translucent
+        # 0.92 provides a good balance of "glass" vs readability
+        self.attributes("-alpha", 0.92)
+        
+        try:
+            if sys.getwindowsversion().build >= 22000:
+                pywinstyles.apply_style(self, "mica")
+                pywinstyles.set_window_attribute(self, "corner_preference", 2)
+            else:
+                pywinstyles.apply_style(self, "acrylic")
+            
+            pywinstyles.set_window_attribute(self, "ncrendering_policy", 1)
+        except Exception as e:
+            print(f"Styling error: {e}")
+
+        self.update()
         self.overrideredirect(True)
         self.attributes('-topmost', True)
-        self.attributes('-alpha', 0.0)
-        self.after(0, lambda: self.wm_attributes("-toolwindow", True))
-        self.after(10, lambda: self.attributes('-alpha', 1.0))
-        self.wm_attributes("-transparentcolor", "#000001")
-        self.configure(fg_color="#000001")
+
         self.withdraw()
         self.bind("<FocusOut>", self.on_focus_out)
 
-        self.outer_frame = ctk.CTkFrame(self, fg_color=BG_APP_OUTER, corner_radius=CORNER_RADIUS_OUTER, border_width=1, border_color=CARD_BORDER)
-        self.outer_frame.pack(side="top", fill="x", padx=2, pady=2)
+        # 3. Outer Frame: Using a tinted dark gray over the chroma background
+        self.outer_frame = ctk.CTkFrame(
+            self, 
+            fg_color=BG_APP_OUTER, 
+            bg_color=CHROMA_KEY,
+            corner_radius=CORNER_RADIUS_OUTER, 
+            border_width=1, 
+            border_color=CARD_BORDER
+        )
+        self.outer_frame.pack(side="top", fill="x")
         
         # --- TABVIEW ---
         self.tab_view = ctk.CTkTabview(self.outer_frame, width=WINDOW_WIDTH-30, fg_color="transparent", 
@@ -538,8 +565,8 @@ class SonosTrayApp(ctk.CTk):
 
     def update_window_height(self):
         self.update_idletasks()
-        # Dynamic height calculation based on the active tab
-        h = self.outer_frame.winfo_reqheight() + 10
+        # Precise height calculation
+        h = self.outer_frame.winfo_reqheight()
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         x = sw - WINDOW_WIDTH - RIGHT_EDGE_OFFSET
         y = sh - h - BOTTOM_EDGE_OFFSET
