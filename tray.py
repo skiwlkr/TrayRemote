@@ -98,7 +98,7 @@ class SonosTrayApp(ctk.CTk):
         
         # --- FLOATING HEADER ELEMENTS ---
         self.header_container = ctk.CTkFrame(self.outer_frame, fg_color="transparent")
-        self.header_container.pack(side="top", fill="x", padx=12, pady=(15, 5))
+        self.header_container.pack(side="top", fill="x", padx=12, pady=(5, 5))
         
         self.title_label = ctk.CTkLabel(self.header_container, text="TrayRemote", font=ctk.CTkFont(size=18, weight="bold"))
         self.title_label.pack(side="left", padx=8)
@@ -168,16 +168,17 @@ class SonosTrayApp(ctk.CTk):
         self.fav_container = ctk.CTkFrame(self.content_area, fg_color="transparent")
         # fav_container is not packed by default
         
-        # Refresh Button
-        self.fav_header = ctk.CTkFrame(self.fav_container, fg_color="transparent")
-        self.fav_header.pack(fill="x", pady=(0, 5))
-        self.refresh_btn = ctk.CTkButton(self.fav_header, text="🔄 REFRESH FAVORITES", font=ctk.CTkFont(size=10, weight="bold"), 
-                      height=28, fg_color=BTN_DEFAULT, hover_color=ACTIVE_BLUE,
-                      command=self.trigger_refresh)
-        self.refresh_btn.pack(fill="x")
-        
         self.fav_list_frame = ctk.CTkFrame(self.fav_container, fg_color="transparent")
         self.fav_list_frame.pack(fill="x")
+        
+        # Refresh Link at the bottom
+        self.fav_footer = ctk.CTkFrame(self.fav_container, fg_color="transparent")
+        self.fav_footer.pack(fill="x", side="bottom", pady=(10, 0))
+        self.refresh_btn = ctk.CTkButton(self.fav_footer, text="refresh", font=ctk.CTkFont(size=12, weight="normal"), 
+                      height=20, fg_color="transparent", hover_color="#2a2a2b",
+                      text_color=ACTIVE_BLUE,
+                      command=self.trigger_refresh)
+        self.refresh_btn.pack(pady=5)
         
         self._loading_favs = False
         threading.Thread(target=self.load_favorites_ui, daemon=True).start()
@@ -212,7 +213,7 @@ class SonosTrayApp(ctk.CTk):
             return
             
         self._loading_favs = True
-        self.after(0, lambda: self.refresh_btn.configure(text="⏳ LOADING...", state="disabled"))
+        self.after(0, lambda: self.refresh_btn.configure(text="loading...", state="disabled"))
         
         try:
             # Get favorites in background
@@ -272,13 +273,13 @@ class SonosTrayApp(ctk.CTk):
                     self.after(200, self.update_window_height)
                 finally:
                     self._loading_favs = False
-                    self.refresh_btn.configure(text="🔄 REFRESH FAVORITES", state="normal")
+                    self.refresh_btn.configure(text="refresh", state="normal")
 
             self.after(0, update_ui)
         except Exception as e:
             print(f"Error loading UI favs: {e}")
             self._loading_favs = False
-            self.after(0, lambda: self.refresh_btn.configure(text="🔄 REFRESH FAVORITES", state="normal"))
+            self.after(0, lambda: self.refresh_btn.configure(text="refresh", state="normal"))
 
     def load_fav_art(self, button_widget, url, title):
         if not url:
