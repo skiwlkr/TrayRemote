@@ -73,11 +73,8 @@ class SonosTrayApp(ctk.CTk):
         try:
             if sys.getwindowsversion().build >= 22000:
                 pywinstyles.apply_style(self, "mica")
-                pywinstyles.set_window_attribute(self, "corner_preference", 2)
             else:
                 pywinstyles.apply_style(self, "acrylic")
-            
-            pywinstyles.set_window_attribute(self, "ncrendering_policy", 1)
         except Exception as e:
             print(f"Styling error: {e}")
 
@@ -99,14 +96,14 @@ class SonosTrayApp(ctk.CTk):
         )
         self.outer_frame.pack(side="top", fill="x")
         
-        # --- HEADER ---
-        self.header_frame = ctk.CTkFrame(self.outer_frame, fg_color="transparent")
-        self.header_frame.pack(side="top", fill="x", padx=12, pady=(15, 2))
+        # --- FLOATING HEADER ELEMENTS ---
+        self.header_container = ctk.CTkFrame(self.outer_frame, fg_color="transparent")
+        self.header_container.pack(side="top", fill="x", padx=12, pady=(15, 5))
         
-        self.title_label = ctk.CTkLabel(self.header_frame, text="TrayRemote", font=ctk.CTkFont(size=18, weight="bold"))
+        self.title_label = ctk.CTkLabel(self.header_container, text="TrayRemote", font=ctk.CTkFont(size=18, weight="bold"))
         self.title_label.pack(side="left", padx=8)
         
-        self.fav_toggle_btn = ctk.CTkButton(self.header_frame, text="⭐", width=32, height=32, 
+        self.fav_toggle_btn = ctk.CTkButton(self.header_container, text="⭐", width=32, height=32, 
                                             fg_color="transparent", hover_color="#2a2a2b", 
                                             text_color="#FFFFFF",
                                             font=ctk.CTkFont(size=16), command=self.toggle_favorites)
@@ -114,7 +111,7 @@ class SonosTrayApp(ctk.CTk):
 
         # --- CONTENT AREA ---
         self.content_area = ctk.CTkFrame(self.outer_frame, fg_color="transparent")
-        self.content_area.pack(side="top", fill="both", expand=True, padx=12, pady=(0, 12))
+        self.content_area.pack(side="top", fill="both", expand=True, padx=12, pady=(5, 12))
         
         # --- VIEW 1: CONTROL ---
         self.main_container = ctk.CTkFrame(self.content_area, fg_color="transparent")
