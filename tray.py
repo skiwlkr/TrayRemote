@@ -193,16 +193,39 @@ class SonosTrayApp(ctk.CTk):
         else: self.show_favorites()
 
     def show_control(self):
-        self.fav_container.pack_forget()
-        self.main_container.pack(side="top", fill="both", expand=True)
-        self.fav_toggle_btn.configure(text_color="#FFFFFF")
-        self.update_window_height()
+        def change():
+            self.fav_container.pack_forget()
+            self.main_container.pack(side="top", fill="both", expand=True)
+            self.fav_toggle_btn.configure(text_color="#FFFFFF")
+            self.update_window_height()
+        self.animate_transition(change)
 
     def show_favorites(self):
-        self.main_container.pack_forget()
-        self.fav_container.pack(side="top", fill="both", expand=True)
-        self.fav_toggle_btn.configure(text_color=ACTIVE_BLUE)
-        self.update_window_height()
+        def change():
+            self.main_container.pack_forget()
+            self.fav_container.pack(side="top", fill="both", expand=True)
+            self.fav_toggle_btn.configure(text_color=ACTIVE_BLUE)
+            self.update_window_height()
+        self.animate_transition(change)
+
+    def animate_transition(self, callback):
+        """Fades the window out, executes the callback, then fades back in."""
+        def fade_in(a):
+            if a <= 0.92:
+                self.attributes("-alpha", a)
+                self.after(10, lambda: fade_in(a + 0.1))
+            else:
+                self.attributes("-alpha", 0.92) # Final snap to target
+
+        def fade_out(a):
+            if a >= 0:
+                self.attributes("-alpha", a)
+                self.after(10, lambda: fade_out(a - 0.1))
+            else:
+                callback()
+                fade_in(0)
+        
+        fade_out(0.92)
 
     def create_card(self, parent):
         return ctk.CTkFrame(parent, fg_color=CARD_BG, corner_radius=CORNER_RADIUS_INNER, border_width=1, border_color=CARD_BORDER)
@@ -590,8 +613,40 @@ class SonosTrayApp(ctk.CTk):
         y = sh - h - BOTTOM_EDGE_OFFSET
         self.geometry(f"{WINDOW_WIDTH}x{int(h)}+{int(x)}+{int(y)}")
 
+    def deiconify_with_fade(self):
+        """Opens the window with a fade-in animation."""
+        self._is_withdrawing = False # Cancel any outgoing fade
+        self.attributes("-alpha", 0.0)
+        self.deiconify()
+        self.update_window_height()
+        self.focus_force()
+        
+        def fade(a):
+            if a <= 0.92:
+                self.attributes("-alpha", a)
+                self.after(10, lambda: fade(a + 0.1))
+            else:
+                self.attributes("-alpha", 0.92)
+        fade(0.0)
+
+    def withdraw_with_fade(self):
+        """Fades the window out then withdraws it."""
+        if getattr(self, "_is_withdrawing", False): return
+        self._is_withdrawing = True
+        
+        def fade(a):
+            if not getattr(self, "_is_withdrawing", False): return # Aborted by deiconify
+            if a >= 0:
+                self.attributes("-alpha", a)
+                self.after(10, lambda: fade(a - 0.1))
+            else:
+                self.withdraw()
+                self._is_withdrawing = False
+        fade(0.92)
+
     def on_focus_out(self, event=None):
-        if self.focus_get() is None: self.withdraw()
+        if self.focus_get() is None: 
+            self.withdraw_with_fade()
 
     def toggle_group_membership(self, p):
         def t():
@@ -615,9 +670,9 @@ def start_tray():
     try: tray_img = Image.open(icon_path)
     except: tray_img = Image.new('RGB', (64, 64), (0, 120, 212))
     def run_tray():
-        menu = pystray.Menu(item("Open", lambda: root.after(0, lambda: (root.deiconify(), position_window(root), root.focus_force())), default=True),
+        menu = pystray.Menu(item("Open", lambda: root.after(0, root.deiconify_with_fade), default=True),
                             item("Exit", lambda i, m: (i.stop(), root.after(0, root.quit))))
-        pystray.Icon("Sonos", tray_img, "Sonos", menu, action=lambda: root.after(0, lambda: (root.deiconify(), position_window(root), root.focus_force()))).run()
+        pystray.Icon("Sonos", tray_img, "Sonos", menu, action=lambda: root.after(0, root.deiconify_with_fade)).run()
     threading.Thread(target=run_tray, daemon=True).start()
     root.mainloop()
 
