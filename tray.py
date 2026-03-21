@@ -99,19 +99,25 @@ class SonosTrayApp(ctk.CTk):
         )
         self.outer_frame.pack(side="top", fill="x")
         
-        # --- TABVIEW ---
-        self.tab_view = ctk.CTkTabview(self.outer_frame, width=WINDOW_WIDTH-30, fg_color="transparent", 
-                                       segmented_button_fg_color=CARD_BG,
-                                       segmented_button_selected_color=ACTIVE_BLUE,
-                                       segmented_button_selected_hover_color=ACTIVE_BLUE,
-                                       command=self.on_tab_change)
-        self.tab_view.pack(side="top", fill="x", padx=12, pady=(2, 12))
+        # --- HEADER ---
+        self.header_frame = ctk.CTkFrame(self.outer_frame, fg_color="transparent")
+        self.header_frame.pack(side="top", fill="x", padx=12, pady=(15, 2))
         
-        self.tab_view.add("Control")
-        self.tab_view.add("Favorites")
+        self.title_label = ctk.CTkLabel(self.header_frame, text="TrayRemote", font=ctk.CTkFont(size=18, weight="bold"))
+        self.title_label.pack(side="left", padx=8)
         
-        # --- TAB 1: CONTROL ---
-        self.main_container = ctk.CTkFrame(self.tab_view.tab("Control"), fg_color="transparent")
+        self.fav_toggle_btn = ctk.CTkButton(self.header_frame, text="⭐", width=32, height=32, 
+                                            fg_color="transparent", hover_color="#2a2a2b", 
+                                            text_color="#FFFFFF",
+                                            font=ctk.CTkFont(size=16), command=self.toggle_favorites)
+        self.fav_toggle_btn.pack(side="right", padx=5)
+
+        # --- CONTENT AREA ---
+        self.content_area = ctk.CTkFrame(self.outer_frame, fg_color="transparent")
+        self.content_area.pack(side="top", fill="both", expand=True, padx=12, pady=(0, 12))
+        
+        # --- VIEW 1: CONTROL ---
+        self.main_container = ctk.CTkFrame(self.content_area, fg_color="transparent")
         self.main_container.pack(side="top", fill="both", expand=True)
         
         self.groups_card = self.create_card(self.main_container)
@@ -164,9 +170,9 @@ class SonosTrayApp(ctk.CTk):
         self.autostart_chk = ctk.CTkCheckBox(as_inner, text="RUN AT STARTUP", variable=self.autostart_var, command=self.toggle_autostart, font=ctk.CTkFont(size=10, weight="bold"), checkbox_width=18, checkbox_height=18)
         self.autostart_chk.pack(anchor='w')
 
-        # --- TAB 2: FAVORITES ---
-        self.fav_container = ctk.CTkFrame(self.tab_view.tab("Favorites"), fg_color="transparent")
-        self.fav_container.pack(fill="both", expand=True)
+        # --- VIEW 2: FAVORITES ---
+        self.fav_container = ctk.CTkFrame(self.content_area, fg_color="transparent")
+        # fav_container is not packed by default
         
         # Refresh Button
         self.fav_header = ctk.CTkFrame(self.fav_container, fg_color="transparent")
@@ -187,7 +193,20 @@ class SonosTrayApp(ctk.CTk):
         if not self._loading_favs:
             threading.Thread(target=self.load_favorites_ui, daemon=True).start()
 
-    def on_tab_change(self):
+    def toggle_favorites(self):
+        if self.fav_container.winfo_viewable(): self.show_control()
+        else: self.show_favorites()
+
+    def show_control(self):
+        self.fav_container.pack_forget()
+        self.main_container.pack(side="top", fill="both", expand=True)
+        self.fav_toggle_btn.configure(text_color="#FFFFFF")
+        self.update_window_height()
+
+    def show_favorites(self):
+        self.main_container.pack_forget()
+        self.fav_container.pack(side="top", fill="both", expand=True)
+        self.fav_toggle_btn.configure(text_color=ACTIVE_BLUE)
         self.update_window_height()
 
     def create_card(self, parent):
@@ -348,7 +367,7 @@ class SonosTrayApp(ctk.CTk):
         print(f"[FAV] Playing {fav.get('title')} - Cover saved: {self.current_favorite_cover}")
         
         threading.Thread(target=lambda: self.controller.play_favorite(fav, self.selected_group_uid), daemon=True).start()
-        self.tab_view.set("Control")
+        self.show_control()
         self.after(50, self.update_window_height)
 
     def setup_controls(self, parent):
