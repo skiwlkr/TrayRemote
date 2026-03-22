@@ -1,4 +1,4 @@
-# tray.py - v1.1.1 (English Translation)
+# tray.py - v1.2.2
 import threading
 import pystray
 from pystray import MenuItem as item
