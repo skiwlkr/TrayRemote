@@ -53,6 +53,17 @@ class SonosTrayApp(ctk.CTk):
         self._current_cover = None # Reference to prevent garbage collection
         self._loading_favs = False
         
+        # --- ASSETS ---
+        assets_dir = os.path.join(os.path.dirname(__file__), "assets", "UI_elements")
+        self.icons = {
+            "backward": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_backward.png")), size=(22, 22)),
+            "forward": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_Forward.png")), size=(22, 22)),
+            "play": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_play.png")), size=(22, 22)),
+            "pause": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_pause.png")), size=(22, 22)),
+            "repeat": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_repeat.png")), size=(18, 18)),
+            "shuffle": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_shuffle.png")), size=(18, 18))
+        }
+        
         try:
             self.controller = SonosController()
         except Exception as e:
@@ -381,19 +392,19 @@ class SonosTrayApp(ctk.CTk):
     def setup_controls(self, parent):
         box = ctk.CTkFrame(parent, fg_color="transparent")
         box.pack(pady=8)
-        btn_cfg = {"width": 38, "height": 38, "font": ctk.CTkFont(size=16), "corner_radius": 19}
-        mode_cfg = {"width": 30, "height": 30, "font": ctk.CTkFont(size=18), "fg_color": "transparent", "hover_color": "#2a2a2b", "text_color": "#FFFFFF"}
-        nav_cfg = {"width": 38, "height": 38, "font": ctk.CTkFont(size=18), "fg_color": "transparent", "hover_color": "#2a2a2b", "text_color": "#FFFFFF"}
+        btn_cfg = {"width": 38, "height": 38, "corner_radius": 19}
+        mode_cfg = {"width": 30, "height": 30, "fg_color": "transparent", "hover_color": "#2a2a2b"}
+        nav_cfg = {"width": 38, "height": 38, "fg_color": "transparent", "hover_color": "#2a2a2b"}
 
-        self.shuffle_btn = ctk.CTkButton(box, text="🔀", command=lambda: self.control_action("shuffle"), **mode_cfg)
+        self.shuffle_btn = ctk.CTkButton(box, text="", image=self.icons["shuffle"], command=lambda: self.control_action("shuffle"), **mode_cfg)
         self.shuffle_btn.pack(side="left", padx=10)
         
-        ctk.CTkButton(box, text="⏮", command=lambda: self.control_action("previous"), **nav_cfg).pack(side="left", padx=3)
-        self.play_btn = ctk.CTkButton(box, text="▶", command=lambda: self.control_action("play_pause"), fg_color=BTN_DEFAULT, **btn_cfg)
+        ctk.CTkButton(box, text="", image=self.icons["backward"], command=lambda: self.control_action("previous"), **nav_cfg).pack(side="left", padx=3)
+        self.play_btn = ctk.CTkButton(box, text="", image=self.icons["play"], command=lambda: self.control_action("play_pause"), fg_color=BTN_DEFAULT, **btn_cfg)
         self.play_btn.pack(side="left", padx=3)
-        ctk.CTkButton(box, text="⏭", command=lambda: self.control_action("next"), **nav_cfg).pack(side="left", padx=3)
+        ctk.CTkButton(box, text="", image=self.icons["forward"], command=lambda: self.control_action("next"), **nav_cfg).pack(side="left", padx=3)
         
-        self.repeat_btn = ctk.CTkButton(box, text="🔁", command=lambda: self.control_action("repeat"), **mode_cfg)
+        self.repeat_btn = ctk.CTkButton(box, text="", image=self.icons["repeat"], command=lambda: self.control_action("repeat"), **mode_cfg)
         self.repeat_btn.pack(side="left", padx=10)
 
     def check_autostart_status(self):
@@ -466,11 +477,11 @@ class SonosTrayApp(ctk.CTk):
                 state = active_g.coordinator.get_current_transport_info().get('current_transport_state', '')
                 self.play_btn.configure(
                     fg_color=ACTIVE_BLUE if state == 'PLAYING' else BTN_DEFAULT,
-                    text="⏸" if state == 'PLAYING' else "▶"
+                    image=self.icons["pause"] if state == 'PLAYING' else self.icons["play"]
                 )
                 pm = active_g.coordinator.play_mode
-                self.shuffle_btn.configure(text_color=ACTIVE_BLUE if "SHUFFLE" in pm else "#FFFFFF")
-                self.repeat_btn.configure(text_color=ACTIVE_BLUE if pm in ["SHUFFLE", "REPEAT_ALL", "REPEAT_ONE"] else "#FFFFFF")
+                self.shuffle_btn.configure(fg_color=ACTIVE_BLUE if "SHUFFLE" in pm else "transparent")
+                self.repeat_btn.configure(fg_color=ACTIVE_BLUE if pm in ["SHUFFLE", "REPEAT_ALL", "REPEAT_ONE"] else "transparent")
                 if len(self.room_vol_widgets) != len(active_g.members): self.rebuild_dynamic_sections()
                 
                 track = active_g.coordinator.get_current_track_info()
