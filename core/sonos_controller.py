@@ -71,7 +71,7 @@ class SonosController:
                                 art_tag = root.find('.//upnp:albumArtURI', ns)
                                 
                                 if art_tag is None:
-                                    art_tag = root.find('.//*[local-name()="albumArtURI"]')
+                                    art_tag = root.find('.//upnp:albumArtURI')
                                 
                                 if art_tag is not None:
                                     album_art = art_tag.text

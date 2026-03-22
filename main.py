@@ -1,4 +1,4 @@
-from tray import start_tray
+from core.tray_app import start_tray
 
 if __name__ == '__main__':
     start_tray()

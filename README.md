@@ -32,8 +32,10 @@ python main.py
 
 Key files
 - [main.py](main.py): App entry point and system tray initialization.
-- [sonos_controller.py](sonos_controller.py): Core Sonos logic: discovery, group management, and favorites handling.
-- [tray.py](tray.py): Modern UI (CustomTkinter), tray lifecycle, and glassmorphism styling.
+- [core/sonos_controller.py](core/sonos_controller.py): Core Sonos logic: discovery, group management, and favorites handling.
+- [core/tray_app.py](core/tray_app.py): Main UI application and window management.
+- [core/favorites_manager.py](core/favorites_manager.py): Handles loading and playback of Sonos favorites.
+- [core/constants.py](core/constants.py): Centralized styling (colors, offsets) and configuration constants.
 - [config.py](config.py): Persistent configuration (e.g., autostart).
 - [requirements.txt](requirements.txt): Python dependencies.
 - [tray.spec](tray.spec): PyInstaller configuration for standalone builds.
