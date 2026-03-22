@@ -5,12 +5,14 @@ A small desktop app to discover and control Sonos speakers on your local network
 <img src="screenshots/TrayRemote_v1.png" alt="drawing" width="300"/>
 
 Features
-- Discover Sonos devices automatically.
-- Playback controls: play, pause, next, previous, seek.
-- Per-room volume and mute/unmute.
-- Grouping support (create/manage Sonos groups where supported).
-- Tray/menubar interface for quick actions.
-- Programmatic API: core controller functions available in `sonos_controller.py`.
+- **Modern Glassmorphism UI:** New transparent, sleek design with interactive hover effects.
+- **Sonos Favorites:** Dedicated tab to quickly access and play your favorite radio stations and playlists.
+- **Automatic Discovery:** Seamlessly find Sonos devices on your local network.
+- **Comprehensive Playback:** Play, pause, next, previous, and seek controls.
+- **Multi-room Audio:** Per-room volume control and mute/unmute.
+- **Group Management:** Easily create and manage Sonos speaker groups.
+- **Tray Access:** Discreet system tray interface for quick, non-intrusive control.
+- **Programmatic API:** Core controller functions available in `sonos_controller.py`.
 
 Quick start
 Requirements
@@ -29,9 +31,9 @@ python main.py
 ```
 
 Key files
-- [main.py](main.py): App entry point and CLI options.
-- [sonos_controller.py](sonos_controller.py): Core logic for discovery and control.
-- [tray.py](tray.py): Tray/menubar UI and shortcuts.
-- [config.py](config.py): Configuration and startup options.
+- [main.py](main.py): App entry point and system tray initialization.
+- [sonos_controller.py](sonos_controller.py): Core Sonos logic: discovery, group management, and favorites handling.
+- [tray.py](tray.py): Modern UI (CustomTkinter), tray lifecycle, and glassmorphism styling.
+- [config.py](config.py): Persistent configuration (e.g., autostart).
 - [requirements.txt](requirements.txt): Python dependencies.
-- [tray.spec](tray.spec): PyInstaller spec for packaging.
+- [tray.spec](tray.spec): PyInstaller configuration for standalone builds.
