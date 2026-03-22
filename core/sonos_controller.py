@@ -1,5 +1,7 @@
 import soco
 import xml.etree.ElementTree as ET
+from soco.plugins.sharelink import ShareLinkPlugin
+import urllib.parse
 
 class SonosController:
     def __init__(self):
@@ -114,7 +116,7 @@ class SonosController:
             return []
 
     def play_favorite(self, fav_data, group_uid=None):
-        """Plays favorites using robust methods for radio streams."""
+        """Plays favorites using robust methods for radio streams and music services."""
         target = self.device
         if group_uid:
             for p in self.players:
@@ -133,6 +135,35 @@ class SonosController:
                     meta = getattr(fav, 'metadata', "")
 
                     print(f"Attempting playback of: {title}")
+
+                    # --- SPECIAL HANDLING FOR SPOTIFY (Tracks, Albums, Playlists) ---
+                    if "spotify" in uri.lower():
+                        try:
+                            print(f"Spotify favorite detected, using ShareLinkPlugin for: {title}")
+                            plugin = ShareLinkPlugin(target)
+                            
+                            clean_uri = uri
+                            # Handle different possible Spotify URI formats in Sonos
+                            if "spotify%3a" in uri.lower() or "spotify:" in uri.lower():
+                                lower_uri = uri.lower()
+                                search_term = "spotify%3a" if "spotify%3a" in lower_uri else "spotify:"
+                                start_idx = lower_uri.find(search_term)
+                                encoded_part = uri[start_idx:]
+                                # Stop at the first '?' or '&' or '"' if present
+                                for char in ['?', '&', '"']:
+                                    if char in encoded_part:
+                                        encoded_part = encoded_part.split(char)[0]
+                                clean_uri = urllib.parse.unquote(encoded_part)
+                                print(f"Extracted Spotify URI: {clean_uri}")
+                            
+                            # Add to queue and play
+                            plugin.add_share_link_to_queue(clean_uri)
+                            queue = target.get_queue()
+                            target.play_from_queue(len(queue) - 1)
+                            print(f"Successfully started Spotify favorite: {title}")
+                            return
+                        except Exception as sp_err:
+                            print(f"ShareLinkPlugin failed for Spotify: {sp_err}, falling back to standard play_uri...")
 
                     try:
                         # For radio favorites (x-sonosapi-stream), providing metadata is mandatory.

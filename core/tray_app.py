@@ -92,10 +92,14 @@ class SonosTrayApp(ctk.CTk):
         self.header_container = ctk.CTkFrame(self.outer_frame, fg_color="transparent")
         self.header_container.pack(side="top", fill="x", padx=12, pady=(5, 5))
         
-        self.title_label = ctk.CTkLabel(self.header_container, text="TrayRemote", font=ctk.CTkFont(size=16, weight="bold"))
-        self.title_label.pack(side="left", padx=8)
-        
+        self.title_label = ctk.CTkLabel(self.header_container, text="TrayRemote", font=ctk.CTkFont(size=18, weight="bold"))
+        self.title_label.pack(side="left", padx=(8, 5))
+
+        self.version_label = ctk.CTkLabel(self.header_container, text=APP_VERSION, font=ctk.CTkFont(size=14), text_color="gray")
+        self.version_label.pack(side="left", pady=(3, 0))
+
         self.fav_toggle_btn = ctk.CTkButton(self.header_container, text="⭐", width=32, height=32, 
+
                                             fg_color="transparent", hover_color="#2a2a2b", 
                                             text_color="#FFFFFF",
                                             font=ctk.CTkFont(size=16), command=self.toggle_favorites)
@@ -331,6 +335,10 @@ class SonosTrayApp(ctk.CTk):
                 for name, w in self.room_vol_widgets.items():
                     p_fresh = next((m for m in active_g.members if m.player_name == name), w["player"])
                     w["slider"].set(p_fresh.volume); w["mute_btn"].configure(text_color=MUTE_RED if p_fresh.mute else "#FFFFFF")
+                
+                # Check if grouping changed (member count mismatch)
+                if len(self.room_vol_widgets) != len(active_g.members):
+                    self.rebuild_dynamic_sections()
         except: pass
         self.after(2000, self.update_status)
 
@@ -422,7 +430,10 @@ class SonosTrayApp(ctk.CTk):
             if target:
                 if p.group.coordinator.uid == target.uid: p.unjoin()
                 else: p.join(target)
-                self.after(800, self.rebuild_dynamic_sections)
+                # First refresh after a short delay (1.2s)
+                self.after(1200, self.rebuild_dynamic_sections)
+                # Safety refresh after a longer delay (3s) to ensure Sonos state is updated
+                self.after(3000, self.rebuild_dynamic_sections)
         threading.Thread(target=t, daemon=True).start()
 
     def set_vol(self, p, v): threading.Thread(target=lambda: setattr(p, 'volume', int(float(v))), daemon=True).start()
