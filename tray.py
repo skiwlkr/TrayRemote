@@ -12,7 +12,6 @@ import os
 import xml.etree.ElementTree as ET
 import ctypes 
 import winreg
-import pywinstyles
 
 # --- DPI SCALE FIX ---
 try:
@@ -70,14 +69,6 @@ class SonosTrayApp(ctk.CTk):
         # 0.92 provides a good balance of "glass" vs readability
         self.attributes("-alpha", 0.92)
         
-        try:
-            if sys.getwindowsversion().build >= 22000:
-                pywinstyles.apply_style(self, "mica")
-            else:
-                pywinstyles.apply_style(self, "acrylic")
-        except Exception as e:
-            print(f"Styling error: {e}")
-
         self.update()
         self.overrideredirect(True)
         self.attributes('-topmost', True)
