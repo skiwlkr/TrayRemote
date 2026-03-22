@@ -354,28 +354,46 @@ class SonosTrayApp(ctk.CTk):
         return ", ".join(dict.fromkeys([a.strip() for a in artists if a.strip()]))
 
     def control_action(self, a):
+        # Immediate UI feedback for common actions
+        if a == "play_pause":
+            # Toggle based on current icon (fastest way to "predict" next state)
+            is_playing = self.play_btn.cget("image") == self.icons["pause"]
+            self.play_btn.configure(
+                image=self.icons["play"] if is_playing else self.icons["pause"],
+                fg_color=BTN_DEFAULT if is_playing else ACTIVE_BLUE
+            )
+        elif a == "next" or a == "previous":
+            # Visual click effect
+            self.track_label.configure(text="Switching...")
+
         def t():
-            groups = self.controller.get_all_groups()
-            coord = next((g.coordinator for g in groups if g.coordinator.uid == self.selected_group_uid), None)
-            if not coord: return
-            if a == "next": coord.next()
-            elif a == "previous": coord.previous()
-            elif a == "play_pause":
-                state = coord.get_current_transport_info().get('current_transport_state', '')
-                if state == 'PLAYING': coord.pause()
-                else: coord.play()
-            elif a in ["shuffle", "repeat"]:
-                pm = coord.play_mode
-                s = "SHUFFLE" in pm
-                r = pm in ["REPEAT_ALL", "REPEAT_ONE", "SHUFFLE", "SHUFFLE_REPEAT_ONE"]
-                if a == "shuffle": s = not s
-                else: r = not r
-                if s and r: nm = "SHUFFLE_REPEAT_ONE" if pm in ["REPEAT_ONE", "SHUFFLE_REPEAT_ONE"] else "SHUFFLE"
-                elif s: nm = "SHUFFLE_NOREPEAT"
-                elif r: nm = "REPEAT_ONE" if pm in ["REPEAT_ONE", "SHUFFLE_REPEAT_ONE"] else "REPEAT_ALL"
-                else: nm = "NORMAL"
-                coord.play_mode = nm
-                self.after(500, self.update_status)
+            try:
+                groups = self.controller.get_all_groups()
+                coord = next((g.coordinator for g in groups if g.coordinator.uid == self.selected_group_uid), None)
+                if not coord: return
+                
+                if a == "next": coord.next()
+                elif a == "previous": coord.previous()
+                elif a == "play_pause":
+                    state = coord.get_current_transport_info().get('current_transport_state', '')
+                    if state == 'PLAYING': coord.pause()
+                    else: coord.play()
+                elif a in ["shuffle", "repeat"]:
+                    pm = coord.play_mode
+                    s = "SHUFFLE" in pm
+                    r = pm in ["REPEAT_ALL", "REPEAT_ONE", "SHUFFLE", "SHUFFLE_REPEAT_ONE"]
+                    if a == "shuffle": s = not s
+                    else: r = not r
+                    if s and r: nm = "SHUFFLE_REPEAT_ONE" if pm in ["REPEAT_ONE", "SHUFFLE_REPEAT_ONE"] else "SHUFFLE"
+                    elif s: nm = "SHUFFLE_NOREPEAT"
+                    elif r: nm = "REPEAT_ONE" if pm in ["REPEAT_ONE", "SHUFFLE_REPEAT_ONE"] else "REPEAT_ALL"
+                    else: nm = "NORMAL"
+                    coord.play_mode = nm
+                
+                # Update UI from network state after a short delay
+                self.after(600, self.update_status)
+            except Exception as e:
+                print(f"Control error: {e}")
         threading.Thread(target=t, daemon=True).start()
 
     def play_favorite_action(self, fav):
