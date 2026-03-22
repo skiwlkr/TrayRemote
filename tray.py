@@ -393,11 +393,12 @@ class SonosTrayApp(ctk.CTk):
         box = ctk.CTkFrame(parent, fg_color="transparent")
         box.pack(pady=8)
         btn_cfg = {"width": 38, "height": 38, "corner_radius": 19}
-        mode_cfg = {"width": 30, "height": 30, "fg_color": "transparent", "hover_color": "#2a2a2b"}
+        # Smaller, transparent mode buttons (shuffle/repeat)
+        mode_cfg = {"width": 26, "height": 26, "fg_color": "transparent", "hover_color": "#2a2a2b", "corner_radius": 13}
         nav_cfg = {"width": 38, "height": 38, "fg_color": "transparent", "hover_color": "#2a2a2b"}
 
         self.shuffle_btn = ctk.CTkButton(box, text="", image=self.icons["shuffle"], command=lambda: self.control_action("shuffle"), **mode_cfg)
-        self.shuffle_btn.pack(side="left", padx=10)
+        self.shuffle_btn.pack(side="left", padx=12)
         
         ctk.CTkButton(box, text="", image=self.icons["backward"], command=lambda: self.control_action("previous"), **nav_cfg).pack(side="left", padx=3)
         self.play_btn = ctk.CTkButton(box, text="", image=self.icons["play"], command=lambda: self.control_action("play_pause"), fg_color=BTN_DEFAULT, **btn_cfg)
@@ -480,8 +481,12 @@ class SonosTrayApp(ctk.CTk):
                     image=self.icons["pause"] if state == 'PLAYING' else self.icons["play"]
                 )
                 pm = active_g.coordinator.play_mode
-                self.shuffle_btn.configure(fg_color=ACTIVE_BLUE if "SHUFFLE" in pm else "transparent")
-                self.repeat_btn.configure(fg_color=ACTIVE_BLUE if pm in ["SHUFFLE", "REPEAT_ALL", "REPEAT_ONE"] else "transparent")
+                # Detection for Sonos Play Modes: NORMAL, SHUFFLE_NOREPEAT, SHUFFLE, REPEAT_ALL, REPEAT_ONE, SHUFFLE_REPEAT_ONE
+                is_shuffled = "SHUFFLE" in pm
+                is_repeat = pm in ["REPEAT_ALL", "REPEAT_ONE", "SHUFFLE", "SHUFFLE_REPEAT_ONE"]
+                
+                self.shuffle_btn.configure(fg_color=ACTIVE_BLUE if is_shuffled else "transparent")
+                self.repeat_btn.configure(fg_color=ACTIVE_BLUE if is_repeat else "transparent")
                 if len(self.room_vol_widgets) != len(active_g.members): self.rebuild_dynamic_sections()
                 
                 track = active_g.coordinator.get_current_track_info()
@@ -594,12 +599,24 @@ class SonosTrayApp(ctk.CTk):
                 if state == 'PLAYING': coord.pause()
                 else: coord.play()
             elif a in ["shuffle", "repeat"]:
-                mode = coord.play_mode
-                s, r = "SHUFFLE" in mode, mode in ["SHUFFLE", "REPEAT_ALL", "REPEAT_ONE"]
+                pm = coord.play_mode
+                # Sonos Modes: NORMAL, SHUFFLE_NOREPEAT, SHUFFLE, REPEAT_ALL, REPEAT_ONE, SHUFFLE_REPEAT_ONE
+                s = "SHUFFLE" in pm
+                r = pm in ["REPEAT_ALL", "REPEAT_ONE", "SHUFFLE", "SHUFFLE_REPEAT_ONE"]
+                
                 if a == "shuffle": s = not s
                 else: r = not r
-                nm = "SHUFFLE" if (s and r) else "SHUFFLE_NOREPEAT" if s else "REPEAT_ALL" if r else "NORMAL"
+                
+                if s and r:
+                    # Keep REPEAT_ONE if it was active
+                    nm = "SHUFFLE_REPEAT_ONE" if pm in ["REPEAT_ONE", "SHUFFLE_REPEAT_ONE"] else "SHUFFLE"
+                elif s: nm = "SHUFFLE_NOREPEAT"
+                elif r: nm = "REPEAT_ONE" if pm in ["REPEAT_ONE", "SHUFFLE_REPEAT_ONE"] else "REPEAT_ALL"
+                else: nm = "NORMAL"
+                
                 coord.play_mode = nm
+                # Immediate UI feedback
+                self.after(500, self.update_status)
         threading.Thread(target=t, daemon=True).start()
 
     def toggle_mute(self, p):
