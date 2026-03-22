@@ -2,11 +2,11 @@
 
 A small desktop app to discover and control Sonos speakers on your local network. Provides playback and volume controls, grouping, and a tray/menubar interface for quick access.
 
-<img src="screenshots/TrayRemote_v1.png" alt="drawing" width="300"/>
+<img src="screenshots/trayremote_tabview.jpg" alt="drawing" width="600"/>
 
 Features
 - **Modern Glassmorphism UI:** New transparent, sleek design with interactive hover effects.
-- **Sonos Favorites:** Dedicated tab to quickly access and play your favorite radio stations and playlists.
+- **Sonos Favorites:** Dedicated tab to quickly access and play your favorite radio stations or music on network drives.
 - **Automatic Discovery:** Seamlessly find Sonos devices on your local network.
 - **Comprehensive Playback:** Play, pause, next, previous, and seek controls.
 - **Multi-room Audio:** Per-room volume control and mute/unmute.
