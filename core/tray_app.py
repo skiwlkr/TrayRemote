@@ -14,6 +14,7 @@ from .sonos_controller import SonosController
 from .constants import *
 from .ui_components import create_card
 from .favorites_manager import FavoritesManager
+from .settings_manager import SettingsManager
 
 # --- DPI SCALE FIX ---
 try:
@@ -41,9 +42,7 @@ class SonosTrayApp(ctk.CTk):
         self.selected_group_uid = None 
         self._current_cover = None # Reference to prevent garbage collection
         self._loading_favs = False
-        
-        # Initialize Managers
-        self.favorites_mgr = FavoritesManager(self)
+        self.autostart_var = ctk.BooleanVar(value=self.check_autostart_status())
         
         # --- ASSETS ---
         # Adjust path to assets since we are now in core/
@@ -56,7 +55,11 @@ class SonosTrayApp(ctk.CTk):
             "play": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_play.png")), size=(22, 22)),
             "pause": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_pause.png")), size=(22, 22)),
             "repeat": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_repeat.png")), size=(18, 18)),
-            "shuffle": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_shuffle.png")), size=(18, 18))
+            "shuffle": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_shuffle.png")), size=(18, 18)),
+            "favorite": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_favorite.png")), size=(25, 25)),
+            "favorite_active": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_favorite_active.png")), size=(25, 25)),
+            "settings": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_settings.png")), size=(25, 25)),
+            "settings_active": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_settings_active.png")), size=(25, 25))
         }
         
         try:
@@ -64,6 +67,8 @@ class SonosTrayApp(ctk.CTk):
         except Exception as e:
             print(f"Startup Error: {e}")
             sys.exit(1)
+
+        self.favorites_mgr = FavoritesManager(self)
 
         # --- GLASSMORPHISM & STYLE ---
         self.configure(fg_color=CHROMA_KEY)
@@ -98,12 +103,16 @@ class SonosTrayApp(ctk.CTk):
         self.version_label = ctk.CTkLabel(self.header_container, text=APP_VERSION, font=ctk.CTkFont(size=14), text_color="gray")
         self.version_label.pack(side="left", pady=(3, 0))
 
-        self.fav_toggle_btn = ctk.CTkButton(self.header_container, text="⭐", width=32, height=32, 
-
+        self.fav_toggle_btn = ctk.CTkButton(self.header_container, text="", image=self.icons["favorite"], width=29, height=29, 
                                             fg_color="transparent", hover_color="#2a2a2b", 
-                                            text_color="#FFFFFF",
-                                            font=ctk.CTkFont(size=16), command=self.toggle_favorites)
-        self.fav_toggle_btn.pack(side="right", padx=5)
+                                            command=self.toggle_favorites)
+        self.fav_toggle_btn.pack(side="right", padx=(0, 2))
+
+        self.settings_btn = ctk.CTkButton(self.header_container, text="", image=self.icons["settings"], width=29, height=29, 
+                                            fg_color="transparent", hover_color="#2a2a2b", 
+                                            command=self.toggle_settings)
+
+        self.settings_btn.pack(side="right", padx=0)
 
         # --- CONTENT AREA ---
         self.content_area = ctk.CTkFrame(self.outer_frame, fg_color="transparent")
@@ -115,14 +124,14 @@ class SonosTrayApp(ctk.CTk):
         
         self.groups_card = create_card(self.main_container)
         self.groups_card.pack(side="top", fill="x", pady=(0, 8))
-        g_box = ctk.CTkFrame(self.groups_card, fg_color="transparent")
-        g_box.pack(fill="x", padx=12, pady=8)
+        self.groups_inner_frame = ctk.CTkFrame(self.groups_card, fg_color="transparent")
+        self.groups_inner_frame.pack(fill="x", padx=12, pady=8)
         
         # Searching label (hidden by default)
-        self.searching_label = ctk.CTkLabel(g_box, text="...searching Sonos devices", font=ctk.CTkFont(size=9), text_color="gray")
+        self.searching_label = ctk.CTkLabel(self.groups_inner_frame, text="...searching Sonos devices", font=ctk.CTkFont(size=11), text_color="gray")
         self.searching_label_visible = False
         
-        self.group_list_frame = ctk.CTkFrame(g_box, fg_color="transparent")
+        self.group_list_frame = ctk.CTkFrame(self.groups_inner_frame, fg_color="transparent")
         self.group_list_frame.pack(fill="x")
 
         self.is_discovering = False # Track discovery state
@@ -159,14 +168,6 @@ class SonosTrayApp(ctk.CTk):
         self.group_ui_list = ctk.CTkFrame(ga_inner, fg_color="transparent")
         self.group_ui_list.pack(fill="x")
 
-        self.autostart_card = create_card(self.main_container)
-        self.autostart_card.pack(side="top", fill="x")
-        as_inner = ctk.CTkFrame(self.autostart_card, fg_color="transparent")
-        as_inner.pack(fill="x", padx=12, pady=8)
-        self.autostart_var = ctk.BooleanVar(value=self.check_autostart_status())
-        self.autostart_chk = ctk.CTkCheckBox(as_inner, text="RUN AT STARTUP", variable=self.autostart_var, command=self.toggle_autostart, font=ctk.CTkFont(size=10, weight="bold"), checkbox_width=18, checkbox_height=18)
-        self.autostart_chk.pack(anchor='w')
-
         # --- VIEW 2: FAVORITES ---
         self.fav_container = ctk.CTkFrame(self.content_area, fg_color="transparent")
         
@@ -180,6 +181,12 @@ class SonosTrayApp(ctk.CTk):
                       text_color=ACTIVE_BLUE,
                       command=self.favorites_mgr.trigger_refresh)
         self.refresh_btn.pack(pady=5)
+
+        # --- VIEW 3: SETTINGS ---
+        self.settings_container = ctk.CTkFrame(self.content_area, fg_color="transparent")
+        
+        # Initialize Managers AFTER containers are defined
+        self.settings_mgr = SettingsManager(self)
         
         threading.Thread(target=self.favorites_mgr.load_favorites_ui, daemon=True).start()
         self.after(100, self.update_status)
@@ -188,19 +195,37 @@ class SonosTrayApp(ctk.CTk):
         if self.fav_container.winfo_viewable(): self.show_control()
         else: self.show_favorites()
 
+    def toggle_settings(self):
+        if self.settings_container.winfo_viewable(): self.show_control()
+        else: self.show_settings()
+
     def show_control(self):
         def change():
             self.fav_container.pack_forget()
+            self.settings_container.pack_forget()
             self.main_container.pack(side="top", fill="both", expand=True)
-            self.fav_toggle_btn.configure(text_color="#FFFFFF")
+            self.fav_toggle_btn.configure(image=self.icons["favorite"], fg_color="transparent")
+            self.settings_btn.configure(image=self.icons["settings"], fg_color="transparent")
             self.update_window_height()
         self.animate_transition(change)
 
     def show_favorites(self):
         def change():
             self.main_container.pack_forget()
+            self.settings_container.pack_forget()
             self.fav_container.pack(side="top", fill="both", expand=True)
-            self.fav_toggle_btn.configure(text_color=ACTIVE_BLUE)
+            self.fav_toggle_btn.configure(image=self.icons["favorite_active"], fg_color="transparent")
+            self.settings_btn.configure(image=self.icons["settings"], fg_color="transparent")
+            self.update_window_height()
+        self.animate_transition(change)
+
+    def show_settings(self):
+        def change():
+            self.main_container.pack_forget()
+            self.fav_container.pack_forget()
+            self.settings_container.pack(side="top", fill="both", expand=True)
+            self.fav_toggle_btn.configure(image=self.icons["favorite"], fg_color="transparent")
+            self.settings_btn.configure(image=self.icons["settings_active"], fg_color="transparent")
             self.update_window_height()
         self.animate_transition(change)
 
@@ -293,7 +318,9 @@ class SonosTrayApp(ctk.CTk):
             # Handle discovery if no players are found
             if not self.controller.players:
                 if not self.searching_label_visible:
-                    self.searching_label.pack(side="top", anchor="w", padx=2)
+                    # Make the groups card more compact while searching
+                    self.groups_inner_frame.pack_configure(pady=4)
+                    self.searching_label.pack(side="top", pady=2)
                     self.searching_label_visible = True
                     self.update_window_height()
                 
@@ -310,6 +337,8 @@ class SonosTrayApp(ctk.CTk):
             # Players found, hide searching label if it was visible
             if self.searching_label_visible:
                 self.searching_label.pack_forget()
+                # Restore original padding
+                self.groups_inner_frame.pack_configure(pady=8)
                 self.searching_label_visible = False
                 self.update_window_height()
 
