@@ -203,11 +203,18 @@ class SonosTrayApp(ctk.CTk):
         
         self.queue_footer = ctk.CTkFrame(self.queue_container, fg_color="transparent")
         self.queue_footer.pack(fill="x", side="bottom", pady=(10, 0))
+        
         self.queue_refresh_btn = ctk.CTkButton(self.queue_footer, text="refresh", font=ctk.CTkFont(size=12, weight="normal"), 
-                      height=20, fg_color="transparent", hover_color="#2a2a2b",
+                      height=20, width=80, fg_color="transparent", hover_color="#2a2a2b",
                       text_color=ACTIVE_BLUE,
                       command=self.queue_mgr.trigger_refresh)
-        self.queue_refresh_btn.pack(pady=5)
+        self.queue_refresh_btn.pack(side="left", expand=True, padx=(20, 5), pady=5)
+
+        self.queue_clear_btn = ctk.CTkButton(self.queue_footer, text="clear", font=ctk.CTkFont(size=12, weight="normal"), 
+                      height=20, width=80, fg_color="transparent", hover_color="#2a2a2b",
+                      text_color=MUTE_RED,
+                      command=self.queue_mgr.clear_queue)
+        self.queue_clear_btn.pack(side="left", expand=True, padx=(5, 20), pady=5)
 
         # Initialize Managers AFTER containers are defined
         self.settings_mgr = SettingsManager(self)

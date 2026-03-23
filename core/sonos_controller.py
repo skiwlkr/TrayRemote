@@ -146,6 +146,20 @@ class SonosController:
         except Exception as e:
             print(f"Error playing from queue: {e}")
 
+    def clear_queue(self, group_uid=None):
+        """Clears the current play queue for the specified group."""
+        target = self.device
+        if group_uid:
+            for p in self.players:
+                if p.group.coordinator.uid == group_uid:
+                    target = p.group.coordinator
+                    break
+        if not target: return
+        try:
+            target.clear_queue()
+        except Exception as e:
+            print(f"Error clearing queue: {e}")
+
     def get_current_track_info(self, group_uid=None):
         """Returns information about the currently playing track, including its queue position."""
         target = self.device

@@ -225,3 +225,10 @@ class QueueManager:
     def play_index(self, index):
         threading.Thread(target=lambda: self.app.controller.play_from_queue(index, self.app.selected_group_uid), daemon=True).start()
         self.app.after(500, self.app.show_control)
+
+    def clear_queue(self):
+        """Clears the queue and refreshes UI."""
+        def t():
+            self.app.controller.clear_queue(self.app.selected_group_uid)
+            self.trigger_refresh()
+        threading.Thread(target=t, daemon=True).start()
