@@ -59,6 +59,9 @@ class QueueManager:
         
         try:
             queue = self.app.controller.get_queue(self.app.selected_group_uid)
+            track_info = self.app.controller.get_current_track_info(self.app.selected_group_uid)
+            # playlist_position is 1-based in Sonos, but 0-based in our queue list
+            current_pos = int(track_info.get('playlist_position', 0)) - 1
             
             if queue:
                 threads = []
@@ -92,7 +95,10 @@ class QueueManager:
                             artist = self._truncate(raw_artist)
                             art_url = getattr(track, 'album_art_uri', None)
                             
-                            f_frame = ctk.CTkFrame(self.app.queue_list_frame, fg_color=CARD_BG, height=60, corner_radius=8, border_width=1, border_color=CARD_BORDER)
+                            is_playing = (i == current_pos)
+                            bg_color = ACTIVE_BLUE if is_playing else CARD_BG
+                            
+                            f_frame = ctk.CTkFrame(self.app.queue_list_frame, fg_color=bg_color, height=60, corner_radius=8, border_width=1, border_color=CARD_BORDER)
                             f_frame.pack(fill="x", pady=3, padx=2)
                             f_frame.pack_propagate(False)
                             
@@ -107,8 +113,10 @@ class QueueManager:
                             a_label = ctk.CTkLabel(f_frame, text=artist, font=ctk.CTkFont(size=11), text_color="#bbbbbb", anchor="w", fg_color="transparent")
                             a_label.place(relx=0, rely=0.65, x=60, anchor="w")
 
-                            def on_enter(e, f=f_frame): f.configure(fg_color=ACTIVE_BLUE)
-                            def on_leave(e, f=f_frame): f.configure(fg_color=CARD_BG)
+                            def on_enter(e, f=f_frame, p=is_playing): 
+                                if not p: f.configure(fg_color=ACTIVE_BLUE)
+                            def on_leave(e, f=f_frame, p=is_playing): 
+                                if not p: f.configure(fg_color=CARD_BG)
                             def on_click(e, idx=i): self.play_index(idx)
 
                             for w in [f_frame, img_label, t_label, a_label]:

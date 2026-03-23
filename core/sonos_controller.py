@@ -146,6 +146,21 @@ class SonosController:
         except Exception as e:
             print(f"Error playing from queue: {e}")
 
+    def get_current_track_info(self, group_uid=None):
+        """Returns information about the currently playing track, including its queue position."""
+        target = self.device
+        if group_uid:
+            for p in self.players:
+                if p.group.coordinator.uid == group_uid:
+                    target = p.group.coordinator
+                    break
+        if not target: return {}
+        try:
+            return target.get_current_track_info()
+        except Exception as e:
+            print(f"Error getting track info: {e}")
+            return {}
+
     def play_favorite(self, fav_data, group_uid=None):
         """Plays favorites using robust methods for radio streams and music services."""
         target = self.device
