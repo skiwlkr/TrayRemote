@@ -11,7 +11,8 @@ class QueueManager:
     def __init__(self, app):
         self.app = app
         self._loading_queue = False
-        self._queue_img_cache = {} # cache_key -> CTkImage
+        self._queue_img_cache = {} # art_url -> CTkImage
+        self._loading_urls = set() # Track URLs currently being fetched
         
         # Create a transparent placeholder to keep alignment consistent
         placeholder = Image.new('RGBA', (40, 40), (0, 0, 0, 0))
@@ -62,12 +63,11 @@ class QueueManager:
             if queue:
                 threads = []
                 for track in queue[:50]:
-                    title, artist = self._get_track_info(track)
                     art_url = getattr(track, 'album_art_uri', None)
-                    cache_key = f"{title}_{artist}"
                     
-                    if art_url and cache_key not in self._queue_img_cache:
-                        t = threading.Thread(target=self._preload_image_only, args=(cache_key, art_url), daemon=True)
+                    if art_url and art_url not in self._queue_img_cache and art_url not in self._loading_urls:
+                        self._loading_urls.add(art_url)
+                        t = threading.Thread(target=self._preload_image_only, args=(art_url,), daemon=True)
                         t.start()
                         threads.append(t)
                 
@@ -96,8 +96,7 @@ class QueueManager:
                             f_frame.pack(fill="x", pady=3, padx=2)
                             f_frame.pack_propagate(False)
                             
-                            cache_key = f"{raw_title}_{raw_artist}"
-                            display_img = self._queue_img_cache.get(cache_key) or self.placeholder_img
+                            display_img = self._queue_img_cache.get(art_url) if art_url else self.placeholder_img
                             
                             img_label = ctk.CTkLabel(f_frame, text="", image=display_img, fg_color="transparent")
                             img_label.place(relx=0, rely=0.5, x=10, anchor="w")
@@ -119,7 +118,7 @@ class QueueManager:
 
                             # If it's still a placeholder but has a URL, start a background update
                             if display_img == self.placeholder_img and art_url:
-                                threading.Thread(target=self._load_and_update_label, args=(img_label, art_url, cache_key), daemon=True).start()
+                                threading.Thread(target=self._load_and_update_label, args=(img_label, art_url), daemon=True).start()
                     
                     if len(queue) >= 50:
                          ctk.CTkLabel(self.app.queue_list_frame, text="Showing first 50 tracks", text_color="gray").pack(pady=5)
@@ -148,42 +147,64 @@ class QueueManager:
             'Sec-Fetch-Site': 'cross-site'
         }
 
-    def _preload_image_only(self, cache_key, url):
+    def _preload_image_only(self, url):
         try:
-            if url.startswith('/'):
+            full_url = url
+            if full_url.startswith('/'):
                 coord = self.app.controller.get_current_coordinator()
-                if coord: url = f"http://{coord.ip_address}:1400{url}"
+                if coord: full_url = f"http://{coord.ip_address}:1400{full_url}"
                 else: return
             
-            resp = requests.get(url, timeout=5, headers=self._get_headers())
+            resp = requests.get(full_url, timeout=5, headers=self._get_headers())
             if resp.status_code == 200 and len(resp.content) > 100:
                 img = Image.open(io.BytesIO(resp.content))
                 if img.mode not in ('RGB', 'RGBA'): img = img.convert('RGB')
                 img = img.resize((40, 40), Image.Resampling.LANCZOS)
                 ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(40, 40))
-                self._queue_img_cache[cache_key] = ctk_img
+                self._queue_img_cache[url] = ctk_img
         except: pass
+        finally:
+            if url in self._loading_urls:
+                self._loading_urls.remove(url)
 
-    def _load_and_update_label(self, label_widget, url, cache_key):
+    def _load_and_update_label(self, label_widget, url):
         """Loads an image and updates a specific label widget directly."""
         try:
-            # Check cache again in case a parallel preload finished
-            if cache_key in self._queue_img_cache:
-                ctk_img = self._queue_img_cache[cache_key]
+            ctk_img = None
+            if url in self._queue_img_cache:
+                ctk_img = self._queue_img_cache[url]
             else:
-                if url.startswith('/'):
-                    coord = self.app.controller.get_current_coordinator()
-                    if coord: url = f"http://{coord.ip_address}:1400{url}"
-                    else: return
+                if url in self._loading_urls:
+                    # Wait a bit if it's already loading elsewhere, then try cache again
+                    for _ in range(20): # max 2 seconds
+                        time.sleep(0.1)
+                        if url in self._queue_img_cache:
+                            ctk_img = self._queue_img_cache[url]
+                            break
                 
-                resp = requests.get(url, timeout=8, headers=self._get_headers())
-                if resp.status_code == 200 and len(resp.content) > 100:
-                    img = Image.open(io.BytesIO(resp.content))
-                    if img.mode not in ('RGB', 'RGBA'): img = img.convert('RGB')
-                    img = img.resize((40, 40), Image.Resampling.LANCZOS)
-                    ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(40, 40))
-                    self._queue_img_cache[cache_key] = ctk_img
-                else: return
+                # If still not in cache and not loading, start a load
+                if not ctk_img and url not in self._loading_urls:
+                    self._loading_urls.add(url)
+                    try:
+                        full_url = url
+                        if full_url.startswith('/'):
+                            coord = self.app.controller.get_current_coordinator()
+                            if coord: full_url = f"http://{coord.ip_address}:1400{full_url}"
+                            else: return
+                        
+                        resp = requests.get(full_url, timeout=8, headers=self._get_headers())
+                        if resp.status_code == 200 and len(resp.content) > 100:
+                            img = Image.open(io.BytesIO(resp.content))
+                            if img.mode not in ('RGB', 'RGBA'): img = img.convert('RGB')
+                            img = img.resize((40, 40), Image.Resampling.LANCZOS)
+                            ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(40, 40))
+                            self._queue_img_cache[url] = ctk_img
+                    finally:
+                        if url in self._loading_urls:
+                            self._loading_urls.remove(url)
+            
+            if not ctk_img:
+                return
 
             def apply():
                 if label_widget.winfo_exists():
