@@ -103,6 +103,8 @@ class QueueManager:
                             f_frame.pack_propagate(False)
                             
                             display_img = self._queue_img_cache.get(art_url) if art_url else self.placeholder_img
+                            if not display_img:
+                                display_img = self.placeholder_img
                             
                             img_label = ctk.CTkLabel(f_frame, text="", image=display_img, fg_color="transparent")
                             img_label.place(relx=0, rely=0.5, x=10, anchor="w")

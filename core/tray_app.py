@@ -59,6 +59,8 @@ class SonosTrayApp(ctk.CTk):
             "shuffle": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_shuffle.png")), size=(18, 18)),
             "favorite": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_favorite.png")), size=(25, 25)),
             "favorite_active": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_favorite_active.png")), size=(25, 25)),
+            "queue": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_queue.png")), size=(25, 25)),
+            "queue_active": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_queue_active.png")), size=(25, 25)),
             "settings": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_settings.png")), size=(25, 25)),
             "settings_active": ctk.CTkImage(Image.open(os.path.join(assets_dir, "ui_settings_active.png")), size=(25, 25))
         }
@@ -110,9 +112,8 @@ class SonosTrayApp(ctk.CTk):
                                             command=self.toggle_favorites)
         self.fav_toggle_btn.pack(side="right", padx=(0, 2))
 
-        self.queue_toggle_btn = ctk.CTkButton(self.header_container, text="≡", width=29, height=29, 
+        self.queue_toggle_btn = ctk.CTkButton(self.header_container, text="", image=self.icons["queue"], width=29, height=29, 
                                             fg_color="transparent", hover_color="#2a2a2b", 
-                                            font=ctk.CTkFont(size=18),
                                             command=self.toggle_queue)
         self.queue_toggle_btn.pack(side="right", padx=(0, 2))
 
@@ -233,7 +234,7 @@ class SonosTrayApp(ctk.CTk):
             self.queue_container.pack_forget()
             self.main_container.pack(side="top", fill="both", expand=True)
             self.fav_toggle_btn.configure(image=self.icons["favorite"], fg_color="transparent")
-            self.queue_toggle_btn.configure(text_color="#FFFFFF", fg_color="transparent")
+            self.queue_toggle_btn.configure(image=self.icons["queue"], fg_color="transparent")
             self.settings_btn.configure(image=self.icons["settings"], fg_color="transparent")
             self.update_window_height()
         self.animate_transition(change)
@@ -245,7 +246,7 @@ class SonosTrayApp(ctk.CTk):
             self.queue_container.pack_forget()
             self.fav_container.pack(side="top", fill="both", expand=True)
             self.fav_toggle_btn.configure(image=self.icons["favorite_active"], fg_color="transparent")
-            self.queue_toggle_btn.configure(text_color="#FFFFFF", fg_color="transparent")
+            self.queue_toggle_btn.configure(image=self.icons["queue"], fg_color="transparent")
             self.settings_btn.configure(image=self.icons["settings"], fg_color="transparent")
             self.update_window_height()
         self.animate_transition(change)
@@ -257,7 +258,7 @@ class SonosTrayApp(ctk.CTk):
             self.settings_container.pack_forget()
             self.queue_container.pack(side="top", fill="both", expand=True)
             self.fav_toggle_btn.configure(image=self.icons["favorite"], fg_color="transparent")
-            self.queue_toggle_btn.configure(text_color=ACTIVE_BLUE, fg_color="transparent")
+            self.queue_toggle_btn.configure(image=self.icons["queue_active"], fg_color="transparent")
             self.settings_btn.configure(image=self.icons["settings"], fg_color="transparent")
             self.update_window_height()
             threading.Thread(target=self.queue_mgr.load_queue_ui, daemon=True).start()
@@ -270,7 +271,7 @@ class SonosTrayApp(ctk.CTk):
             self.queue_container.pack_forget()
             self.settings_container.pack(side="top", fill="both", expand=True)
             self.fav_toggle_btn.configure(image=self.icons["favorite"], fg_color="transparent")
-            self.queue_toggle_btn.configure(text_color="#FFFFFF", fg_color="transparent")
+            self.queue_toggle_btn.configure(image=self.icons["queue"], fg_color="transparent")
             self.settings_btn.configure(image=self.icons["settings_active"], fg_color="transparent")
             self.update_window_height()
         self.animate_transition(change)
