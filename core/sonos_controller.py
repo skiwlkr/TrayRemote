@@ -34,7 +34,6 @@ class SonosController:
         return self.players
 
     def get_current_coordinator(self):
-        if not self.players: self.discover_players()
         return self.players[0] if self.players else None
 
     def get_all_groups(self):

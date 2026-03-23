@@ -117,8 +117,15 @@ class SonosTrayApp(ctk.CTk):
         self.groups_card.pack(side="top", fill="x", pady=(0, 8))
         g_box = ctk.CTkFrame(self.groups_card, fg_color="transparent")
         g_box.pack(fill="x", padx=12, pady=8)
+        
+        # Searching label (hidden by default)
+        self.searching_label = ctk.CTkLabel(g_box, text="...searching Sonos devices", font=ctk.CTkFont(size=9), text_color="gray")
+        self.searching_label_visible = False
+        
         self.group_list_frame = ctk.CTkFrame(g_box, fg_color="transparent")
         self.group_list_frame.pack(fill="x")
+
+        self.is_discovering = False # Track discovery state
 
         self.song_card = create_card(self.main_container)
         self.song_card.pack(side="top", fill="x", pady=(0, 8))
@@ -283,8 +290,33 @@ class SonosTrayApp(ctk.CTk):
 
     def update_status(self):
         try:
+            # Handle discovery if no players are found
+            if not self.controller.players:
+                if not self.searching_label_visible:
+                    self.searching_label.pack(side="top", anchor="w", padx=2)
+                    self.searching_label_visible = True
+                    self.update_window_height()
+                
+                if not self.is_discovering:
+                    self.is_discovering = True
+                    def do_discover():
+                        self.controller.discover_players()
+                        self.is_discovering = False
+                    threading.Thread(target=do_discover, daemon=True).start()
+                
+                self.after(5000, self.update_status)
+                return
+
+            # Players found, hide searching label if it was visible
+            if self.searching_label_visible:
+                self.searching_label.pack_forget()
+                self.searching_label_visible = False
+                self.update_window_height()
+
             groups = self.controller.get_all_groups()
-            if not groups: return
+            if not groups:
+                self.after(2000, self.update_status)
+                return
             if not self.selected_group_uid:
                 self.selected_group_uid = groups[0].coordinator.uid
                 self.rebuild_dynamic_sections()
