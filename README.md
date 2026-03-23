@@ -7,12 +7,16 @@ A small desktop app to discover and control Sonos speakers on your local network
 Features
 - **Modern Glassmorphism UI:** New transparent, sleek design with interactive hover effects.
 - **Sonos Favorites:** Dedicated tab to quickly access and play your favorite radio stations or music on network drives.
+- **Enhanced Favorites:** The Favorites tab now supports playback for Spotify and Apple Music (albums/tracks), as well as radio stations and network audio files.
+- **Settings & Discovery:** Added a new Settings tab featuring a "Rediscover Sonos Devices" mechanism.
 - **Automatic Discovery:** Seamlessly find Sonos devices on your local network.
 - **Comprehensive Playback:** Play, pause, next, previous, and seek controls.
 - **Multi-room Audio:** Per-room volume control and mute/unmute.
 - **Group Management:** Easily create and manage Sonos speaker groups.
 - **Tray Access:** Discreet system tray interface for quick, non-intrusive control.
 - **Programmatic API:** Core controller functions available in `sonos_controller.py`.
+
+*Note: Currently, playback functionality has been verified for Spotify only.*
 
 Quick start
 Requirements

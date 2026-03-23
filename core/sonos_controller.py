@@ -135,25 +135,39 @@ class SonosController:
 
                     print(f"Attempting playback of: {title}")
 
-                    # --- SPECIAL HANDLING FOR SPOTIFY (Tracks, Albums, Playlists) ---
-                    if "spotify" in uri.lower():
+                    # --- SPECIAL HANDLING FOR SERVICES (Spotify, Apple Music) ---
+                    is_spotify = "spotify" in uri.lower()
+                    is_apple = "apple" in uri.lower() and "music" in uri.lower()
+                    
+                    if is_spotify or is_apple:
                         try:
-                            print(f"Spotify favorite detected, using ShareLinkPlugin for: {title}")
+                            service_name = "Spotify" if is_spotify else "Apple Music"
+                            print(f"{service_name} favorite detected, using ShareLinkPlugin for: {title}")
                             plugin = ShareLinkPlugin(target)
                             
                             clean_uri = uri
-                            # Handle different possible Spotify URI formats in Sonos
-                            if "spotify%3a" in uri.lower() or "spotify:" in uri.lower():
-                                lower_uri = uri.lower()
-                                search_term = "spotify%3a" if "spotify%3a" in lower_uri else "spotify:"
-                                start_idx = lower_uri.find(search_term)
+                            # Extract clean URI (spotify:xxx or applemusic:xxx)
+                            # Sonos URIs often look like: x-rincon-cpcontainer:1004206caspotify%3aalbum%3a...
+                            # or x-rincon-cpcontainer:1004206caapplemusic%3aalbum%3a...
+                            
+                            search_terms = ["spotify%3a", "spotify:", "applemusic%3a", "applemusic:"]
+                            lower_uri = uri.lower()
+                            
+                            found_term = None
+                            for term in search_terms:
+                                if term in lower_uri:
+                                    found_term = term
+                                    break
+                            
+                            if found_term:
+                                start_idx = lower_uri.find(found_term)
                                 encoded_part = uri[start_idx:]
-                                # Stop at the first '?' or '&' or '"' if present
-                                for char in ['?', '&', '"']:
+                                # Stop at common delimiters
+                                for char in ['?', '&', '"', ' ']:
                                     if char in encoded_part:
                                         encoded_part = encoded_part.split(char)[0]
                                 clean_uri = urllib.parse.unquote(encoded_part)
-                                print(f"Extracted Spotify URI: {clean_uri}")
+                                print(f"Extracted service URI: {clean_uri}")
                             
                             # Get queue length before adding to know where the first new track will be
                             queue_before = target.get_queue()
@@ -164,10 +178,10 @@ class SonosController:
                             
                             # Play from the start_index
                             target.play_from_queue(start_index)
-                            print(f"Successfully started Spotify favorite (at index {start_index}): {title}")
+                            print(f"Successfully started {service_name} favorite (at index {start_index}): {title}")
                             return
-                        except Exception as sp_err:
-                            print(f"ShareLinkPlugin failed for Spotify: {sp_err}, falling back to standard play_uri...")
+                        except Exception as service_err:
+                            print(f"ShareLinkPlugin failed for {service_name}: {service_err}, falling back to standard play_uri...")
 
                     try:
                         # For radio favorites (x-sonosapi-stream), providing metadata is mandatory.
