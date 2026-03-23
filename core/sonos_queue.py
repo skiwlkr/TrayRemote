@@ -134,6 +134,11 @@ class QueueManager:
                          ctk.CTkLabel(self.app.queue_list_frame, text="Showing first 50 tracks", text_color="gray").pack(pady=5)
 
                     self.app.update_window_height()
+                    
+                    # Reset scroll position to top
+                    try:
+                        self.app.queue_list_frame._parent_canvas.yview_moveto(0)
+                    except: pass
                 finally:
                     self._loading_queue = False
                     self.app.queue_refresh_btn.configure(text="refresh", state="normal")
