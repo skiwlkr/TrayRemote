@@ -15,6 +15,7 @@ from .constants import *
 from .ui_components import create_card
 from .favorites_manager import FavoritesManager
 from .settings_manager import SettingsManager
+from .sonos_queue import QueueManager
 
 # --- DPI SCALE FIX ---
 try:
@@ -69,6 +70,7 @@ class SonosTrayApp(ctk.CTk):
             sys.exit(1)
 
         self.favorites_mgr = FavoritesManager(self)
+        self.queue_mgr = QueueManager(self)
 
         # --- GLASSMORPHISM & STYLE ---
         self.configure(fg_color=CHROMA_KEY)
@@ -107,6 +109,12 @@ class SonosTrayApp(ctk.CTk):
                                             fg_color="transparent", hover_color="#2a2a2b", 
                                             command=self.toggle_favorites)
         self.fav_toggle_btn.pack(side="right", padx=(0, 2))
+
+        self.queue_toggle_btn = ctk.CTkButton(self.header_container, text="≡", width=29, height=29, 
+                                            fg_color="transparent", hover_color="#2a2a2b", 
+                                            font=ctk.CTkFont(size=18),
+                                            command=self.toggle_queue)
+        self.queue_toggle_btn.pack(side="right", padx=(0, 2))
 
         self.settings_btn = ctk.CTkButton(self.header_container, text="", image=self.icons["settings"], width=29, height=29, 
                                             fg_color="transparent", hover_color="#2a2a2b", 
@@ -185,6 +193,21 @@ class SonosTrayApp(ctk.CTk):
         # --- VIEW 3: SETTINGS ---
         self.settings_container = ctk.CTkFrame(self.content_area, fg_color="transparent")
         
+        # --- VIEW 4: QUEUE ---
+        self.queue_container = ctk.CTkFrame(self.content_area, fg_color="transparent")
+        
+        # We use a scrollable frame for the queue since it can be long
+        self.queue_list_frame = ctk.CTkScrollableFrame(self.queue_container, fg_color="transparent", height=400)
+        self.queue_list_frame.pack(fill="both", expand=True)
+        
+        self.queue_footer = ctk.CTkFrame(self.queue_container, fg_color="transparent")
+        self.queue_footer.pack(fill="x", side="bottom", pady=(10, 0))
+        self.queue_refresh_btn = ctk.CTkButton(self.queue_footer, text="refresh", font=ctk.CTkFont(size=12, weight="normal"), 
+                      height=20, fg_color="transparent", hover_color="#2a2a2b",
+                      text_color=ACTIVE_BLUE,
+                      command=self.queue_mgr.trigger_refresh)
+        self.queue_refresh_btn.pack(pady=5)
+
         # Initialize Managers AFTER containers are defined
         self.settings_mgr = SettingsManager(self)
         
@@ -195,6 +218,10 @@ class SonosTrayApp(ctk.CTk):
         if self.fav_container.winfo_viewable(): self.show_control()
         else: self.show_favorites()
 
+    def toggle_queue(self):
+        if self.queue_container.winfo_viewable(): self.show_control()
+        else: self.show_queue()
+
     def toggle_settings(self):
         if self.settings_container.winfo_viewable(): self.show_control()
         else: self.show_settings()
@@ -203,8 +230,10 @@ class SonosTrayApp(ctk.CTk):
         def change():
             self.fav_container.pack_forget()
             self.settings_container.pack_forget()
+            self.queue_container.pack_forget()
             self.main_container.pack(side="top", fill="both", expand=True)
             self.fav_toggle_btn.configure(image=self.icons["favorite"], fg_color="transparent")
+            self.queue_toggle_btn.configure(text_color="#FFFFFF", fg_color="transparent")
             self.settings_btn.configure(image=self.icons["settings"], fg_color="transparent")
             self.update_window_height()
         self.animate_transition(change)
@@ -213,18 +242,35 @@ class SonosTrayApp(ctk.CTk):
         def change():
             self.main_container.pack_forget()
             self.settings_container.pack_forget()
+            self.queue_container.pack_forget()
             self.fav_container.pack(side="top", fill="both", expand=True)
             self.fav_toggle_btn.configure(image=self.icons["favorite_active"], fg_color="transparent")
+            self.queue_toggle_btn.configure(text_color="#FFFFFF", fg_color="transparent")
             self.settings_btn.configure(image=self.icons["settings"], fg_color="transparent")
             self.update_window_height()
+        self.animate_transition(change)
+
+    def show_queue(self):
+        def change():
+            self.main_container.pack_forget()
+            self.fav_container.pack_forget()
+            self.settings_container.pack_forget()
+            self.queue_container.pack(side="top", fill="both", expand=True)
+            self.fav_toggle_btn.configure(image=self.icons["favorite"], fg_color="transparent")
+            self.queue_toggle_btn.configure(text_color=ACTIVE_BLUE, fg_color="transparent")
+            self.settings_btn.configure(image=self.icons["settings"], fg_color="transparent")
+            self.update_window_height()
+            threading.Thread(target=self.queue_mgr.load_queue_ui, daemon=True).start()
         self.animate_transition(change)
 
     def show_settings(self):
         def change():
             self.main_container.pack_forget()
             self.fav_container.pack_forget()
+            self.queue_container.pack_forget()
             self.settings_container.pack(side="top", fill="both", expand=True)
             self.fav_toggle_btn.configure(image=self.icons["favorite"], fg_color="transparent")
+            self.queue_toggle_btn.configure(text_color="#FFFFFF", fg_color="transparent")
             self.settings_btn.configure(image=self.icons["settings_active"], fg_color="transparent")
             self.update_window_height()
         self.animate_transition(change)

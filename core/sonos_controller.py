@@ -114,6 +114,38 @@ class SonosController:
             print(f"Error loading favorites: {e}")
             return []
 
+    def get_queue(self, group_uid=None):
+        """Retrieves the current play queue for the specified group."""
+        target = self.device
+        if group_uid:
+            for p in self.players:
+                if p.group.coordinator.uid == group_uid:
+                    target = p.group.coordinator
+                    break
+        if not target: return []
+        try:
+            # We fetch up to 50 items for performance. 
+            # SoCo's SearchResult doesn't always support slicing, so we convert to list.
+            queue = target.get_queue(max_items=50)
+            return list(queue)
+        except Exception as e:
+            print(f"Error getting queue: {e}")
+            return []
+
+    def play_from_queue(self, index, group_uid=None):
+        """Plays a track from the queue at the specified index."""
+        target = self.device
+        if group_uid:
+            for p in self.players:
+                if p.group.coordinator.uid == group_uid:
+                    target = p.group.coordinator
+                    break
+        if not target: return
+        try:
+            target.play_from_queue(index)
+        except Exception as e:
+            print(f"Error playing from queue: {e}")
+
     def play_favorite(self, fav_data, group_uid=None):
         """Plays favorites using robust methods for radio streams and music services."""
         target = self.device
