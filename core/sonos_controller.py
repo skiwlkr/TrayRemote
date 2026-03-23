@@ -155,11 +155,16 @@ class SonosController:
                                 clean_uri = urllib.parse.unquote(encoded_part)
                                 print(f"Extracted Spotify URI: {clean_uri}")
                             
-                            # Add to queue and play
+                            # Get queue length before adding to know where the first new track will be
+                            queue_before = target.get_queue()
+                            start_index = len(queue_before)
+                            
+                            # Add to queue
                             plugin.add_share_link_to_queue(clean_uri)
-                            queue = target.get_queue()
-                            target.play_from_queue(len(queue) - 1)
-                            print(f"Successfully started Spotify favorite: {title}")
+                            
+                            # Play from the start_index
+                            target.play_from_queue(start_index)
+                            print(f"Successfully started Spotify favorite (at index {start_index}): {title}")
                             return
                         except Exception as sp_err:
                             print(f"ShareLinkPlugin failed for Spotify: {sp_err}, falling back to standard play_uri...")

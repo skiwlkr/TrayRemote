@@ -60,14 +60,16 @@ def play_spotify_favorite(favorite_title):
             clean_uri = urllib.parse.unquote(encoded_part)
             print(f"Extracted clean Spotify URI: {clean_uri}")
 
+        # Get queue length before adding
+        queue_before = device.get_queue()
+        start_index = len(queue_before)
+        
         # Add to queue
         plugin.add_share_link_to_queue(clean_uri)
         
-        # Play the last added item in the queue
-        queue = device.get_queue()
-        print(f"Queue size now: {len(queue)}")
-        device.play_from_queue(len(queue) - 1)
-        print("Playback started!")
+        # Play from the start_index
+        device.play_from_queue(start_index)
+        print(f"Playback started at queue index {start_index}!")
         
     except Exception as e:
         print(f"Error using ShareLinkPlugin: {e}")
