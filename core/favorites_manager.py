@@ -2,6 +2,7 @@
 import threading
 import requests
 import io
+import time
 from PIL import Image
 import customtkinter as ctk
 from .constants import CARD_BG, ACTIVE_BLUE, CARD_BORDER
@@ -12,40 +13,70 @@ class FavoritesManager:
 
     def trigger_refresh(self):
         if not self.app._loading_favs:
-            threading.Thread(target=self.load_favorites_ui, daemon=True).start()
+            # Use the app's transition animation to fade out before starting
+            self.app.animate_transition(lambda: threading.Thread(target=self.load_favorites_ui, args=(0, True), daemon=True).start())
 
-    def load_favorites_ui(self, retry_count=0):
-        """Fetches favorites and refreshes the UI."""
+    def load_favorites_ui(self, retry_count=0, animate=False):
+        """Fetches favorites, pre-loads images, and then refreshes the UI with optional animation."""
         if self.app._loading_favs and retry_count == 0:
             return
             
         self.app._loading_favs = True
-        self.app.after(0, lambda: self.app.refresh_btn.configure(text="loading...", state="disabled"))
+        
+        def show_loading_state():
+            self.app.refresh_btn.configure(text="loading...", state="disabled")
+            # Clear previous widgets and show loading label
+            for widget in self.app.fav_list_frame.winfo_children():
+                widget.destroy()
+            
+            l_container = ctk.CTkFrame(self.app.fav_list_frame, fg_color="transparent")
+            l_container.pack(pady=80, fill="both", expand=True)
+            
+            ctk.CTkLabel(l_container, text="Updating Favorites", 
+                        font=ctk.CTkFont(size=16, weight="bold")).pack()
+            ctk.CTkLabel(l_container, text="fetching latest covers...", 
+                        font=ctk.CTkFont(size=13), text_color="gray").pack(pady=(5, 0))
+            self.app.update_window_height()
+
+        # If we are already in the "invisible" part of an animation, just run it
+        # Otherwise, if we want animation, this should have been triggered by animate_transition
+        self.app.after(0, show_loading_state)
         
         try:
-            # Get favorites in background
+            # 1. Get favorites data from Sonos
             favs = self.app.controller.get_favorites()
             
             # If no favorites found and we haven't retried much, try again after a short delay
             if not favs and retry_count < 2:
                 print(f"[FAV] No favorites found, retrying... ({retry_count + 1}/2)")
-                self.app.after(2000, lambda: threading.Thread(target=self.load_favorites_ui, args=(retry_count + 1,), daemon=True).start())
-                return
+                time.sleep(1.5)
+                return self.load_favorites_ui(retry_count + 1, animate)
 
-            # Merge cover URLs for fallback with radio stations
+            # 2. Pre-load images in background
             if favs:
-                new_covers = {fav['title']: fav['album_art'] for fav in favs if fav.get('album_art')}
-                self.app.favorite_covers.update(new_covers)
-                print(f"[FAV CACHE] Total {len(self.app.favorite_covers)} covers in cache")
-            
+                threads = []
+                for fav in favs:
+                    title = fav.get('title')
+                    art_url = fav.get('album_art')
+                    
+                    if art_url and title not in self.app._img_cache:
+                        t = threading.Thread(target=self._preload_image_only, args=(title, art_url), daemon=True)
+                        t.start()
+                        threads.append(t)
+                
+                # Wait for images to load (max 2.5 seconds)
+                start_wait = time.time()
+                while any(t.is_alive() for t in threads) and (time.time() - start_wait < 2.5):
+                    time.sleep(0.1)
+
+            # 3. Update the UI
             def update_ui():
                 try:
-                    # Clear previous widgets
                     for widget in self.app.fav_list_frame.winfo_children():
                         widget.destroy()
                     
                     if not favs:
-                        ctk.CTkLabel(self.app.fav_list_frame, text="No favorites found.", text_color="gray").pack(pady=10)
+                        ctk.CTkLabel(self.app.fav_list_frame, text="No favorites found.", text_color="gray").pack(pady=20)
                     else:
                         print(f"[FAV] Rebuilding UI with {len(favs)} favorites")
                         for fav in favs:
@@ -53,40 +84,73 @@ class FavoritesManager:
                             f_frame = ctk.CTkFrame(self.app.fav_list_frame, fg_color="transparent")
                             f_frame.pack(fill="x", pady=2)
                             
+                            display_img = self.app._img_cache.get(title)
+                            
                             btn = ctk.CTkButton(
                                 f_frame, text=title, anchor="w",
                                 fg_color=CARD_BG, hover_color=ACTIVE_BLUE, height=45,
                                 border_width=1, border_color=CARD_BORDER,
-                                compound="left",
+                                compound="left", image=display_img,
                                 command=lambda f=fav: self.app.play_favorite_action(f)
                             )
                             btn.pack(fill="x", padx=10)
                             
-                            # 1. Check if we have the actual Image object in memory for instant display
-                            if title in self.app._img_cache:
-                                print(f"[FAV] Instant load from memory: {title}")
-                                btn.configure(image=self.app._img_cache[title])
-                            else:
-                                # 2. Determine cover URL (favor fresh data, fallback to URL cache)
-                                art_url = fav.get('album_art')
-                                if not art_url and title in self.app.favorite_covers:
-                                    art_url = self.app.favorite_covers[title]
-                                    
+                            if not display_img:
+                                art_url = fav.get('album_art') or self.app.favorite_covers.get(title)
                                 if art_url:
                                     threading.Thread(target=self.load_fav_art, args=(btn, art_url, title), daemon=True).start()
-                                else:
-                                    print(f"[FAV] No cover URL for {title}")
                     
-                    self.app.after(200, self.app.update_window_height)
+                    self.app.update_window_height()
                 finally:
                     self.app._loading_favs = False
                     self.app.refresh_btn.configure(text="refresh", state="normal")
 
-            self.app.after(0, update_ui)
+            # Final transition back to the list
+            if animate:
+                # If we're animating, fade out the "Loading..." state before showing the list
+                self.app.after(500, lambda: self.app.animate_transition(update_ui))
+            else:
+                self.app.after(100, update_ui)
+                
         except Exception as e:
             print(f"Error loading UI favs: {e}")
             self.app._loading_favs = False
             self.app.after(0, lambda: self.app.refresh_btn.configure(text="refresh", state="normal"))
+
+        except Exception as e:
+            print(f"Error loading UI favs: {e}")
+            self.app._loading_favs = False
+            self.app.after(0, lambda: self.app.refresh_btn.configure(text="refresh", state="normal"))
+
+    def _preload_image_only(self, title, url):
+        """Helper to load image into cache without touching UI."""
+        try:
+            # Construct full URL for relative paths
+            if url.startswith('/'):
+                coord = self.app.controller.get_current_coordinator()
+                if coord:
+                    url = f"http://{coord.ip_address}:1400{url}"
+                else: return
+
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                'Referer': 'https://mytuner-radio.com/',
+                'Connection': 'keep-alive'
+            }
+            
+            resp = requests.get(url, timeout=4, headers=headers)
+            if resp.status_code == 200 and len(resp.content) > 100:
+                img = Image.open(io.BytesIO(resp.content))
+                if img.mode not in ('RGB', 'RGBA'):
+                    img = img.convert('RGB')
+                
+                img = img.resize((35, 35), Image.Resampling.LANCZOS)
+                ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(35, 35))
+                self.app._img_cache[title] = ctk_img
+        except:
+            pass
+
 
     def load_fav_art(self, button_widget, url, title):
         if not url:
