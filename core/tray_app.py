@@ -293,17 +293,19 @@ class SonosTrayApp(ctk.CTk):
         def fade_in(a):
             if a <= WINDOW_ALPHA:
                 self.attributes("-alpha", a)
-                self.after(10, lambda: fade_in(a + 0.1))
+                self.after(16, lambda: fade_in(a + 0.12))
             else:
                 self.attributes("-alpha", WINDOW_ALPHA)
 
         def fade_out(a):
-            if a >= 0:
+            if a >= 0.1:
                 self.attributes("-alpha", a)
-                self.after(10, lambda: fade_out(a - 0.1))
+                self.after(16, lambda: fade_out(a - 0.12))
             else:
+                self.attributes("-alpha", 0.0)
                 callback()
-                fade_in(0)
+                # Tiny delay to allow UI layout to settle
+                self.after(10, lambda: fade_in(0.0))
         fade_out(WINDOW_ALPHA)
 
     def setup_controls(self, parent):
@@ -540,21 +542,21 @@ class SonosTrayApp(ctk.CTk):
         self.update_window_height()
         self.focus_force()
         def fade(a):
-            if a <= WINDOW_ALPHA:
+            if not self._is_withdrawing and a <= WINDOW_ALPHA:
                 self.attributes("-alpha", a)
-                self.after(10, lambda: fade(a + 0.1))
-            else: self.attributes("-alpha", WINDOW_ALPHA)
+                self.after(16, lambda: fade(a + 0.15))
+            elif not self._is_withdrawing: 
+                self.attributes("-alpha", WINDOW_ALPHA)
         fade(0.0)
 
     def withdraw_with_fade(self):
         if getattr(self, "_is_withdrawing", False): return
         self._is_withdrawing = True
         def fade(a):
-            if not getattr(self, "_is_withdrawing", False): return
-            if a >= 0:
+            if getattr(self, "_is_withdrawing", False) and a >= 0.1:
                 self.attributes("-alpha", a)
-                self.after(10, lambda: fade(a - 0.1))
-            else:
+                self.after(16, lambda: fade(a - 0.15))
+            elif getattr(self, "_is_withdrawing", False):
                 self.withdraw()
                 self._is_withdrawing = False
         fade(WINDOW_ALPHA)
