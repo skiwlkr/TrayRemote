@@ -268,7 +268,13 @@ class SonosTrayApp(ctk.CTk):
             self.queue_toggle_btn.configure(image=self.icons["queue_active"], fg_color="transparent")
             self.settings_btn.configure(image=self.icons["settings"], fg_color="transparent")
             self.update_window_height()
-            threading.Thread(target=self.queue_mgr.load_queue_ui, daemon=True).start()
+            
+            # Only reload if not already loaded or group changed
+            if not self.queue_mgr.is_ui_ready or self.queue_mgr.last_group_uid != self.selected_group_uid:
+                threading.Thread(target=self.queue_mgr.load_queue_ui, daemon=True).start()
+            else:
+                # If cached, at least update the "now playing" highlight
+                self.queue_mgr.update_active_highlight()
         self.animate_transition(change)
 
     def show_settings(self):

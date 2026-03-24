@@ -11,6 +11,8 @@ class QueueManager:
     def __init__(self, app):
         self.app = app
         self._loading_queue = False
+        self.is_ui_ready = False
+        self.last_group_uid = None
         self._queue_img_cache = {} # art_url -> CTkImage
         self._loading_urls = set() # Track URLs currently being fetched
         
@@ -20,6 +22,7 @@ class QueueManager:
 
     def trigger_refresh(self):
         if not self._loading_queue:
+            self.is_ui_ready = False
             self.app.animate_transition(lambda: threading.Thread(target=self.load_queue_ui, daemon=True).start())
 
     def _get_track_info(self, track):
@@ -38,6 +41,7 @@ class QueueManager:
             return
             
         self._loading_queue = True
+        self.last_group_uid = self.app.selected_group_uid
         
         def show_loading_state():
             self.app.queue_refresh_btn.configure(text="loading...", state="disabled")
@@ -99,6 +103,7 @@ class QueueManager:
                             bg_color = ACTIVE_BLUE if is_playing else CARD_BG
                             
                             f_frame = ctk.CTkFrame(self.app.queue_list_frame, fg_color=bg_color, height=60, corner_radius=8, border_width=1, border_color=CARD_BORDER)
+                            f_frame._queue_index = i # Store index for highlighting
                             f_frame.pack(fill="x", pady=3, padx=2)
                             f_frame.pack_propagate(False)
                             
@@ -115,15 +120,20 @@ class QueueManager:
                             a_label = ctk.CTkLabel(f_frame, text=artist, font=ctk.CTkFont(size=11), text_color="#bbbbbb", anchor="w", fg_color="transparent")
                             a_label.place(relx=0, rely=0.65, x=60, anchor="w")
 
-                            def on_enter(e, f=f_frame, p=is_playing): 
-                                if not p: f.configure(fg_color=ACTIVE_BLUE)
-                            def on_leave(e, f=f_frame, p=is_playing): 
-                                if not p: f.configure(fg_color=CARD_BG)
+                            def on_enter(e, f=f_frame, idx=i): 
+                                # Use current_pos logic here too
+                                track_info = self.app.controller.get_current_track_info(self.app.selected_group_uid)
+                                curr = int(track_info.get('playlist_position', 0)) - 1
+                                if idx != curr: f.configure(fg_color=ACTIVE_BLUE)
+                            def on_leave(e, f=f_frame, idx=i): 
+                                track_info = self.app.controller.get_current_track_info(self.app.selected_group_uid)
+                                curr = int(track_info.get('playlist_position', 0)) - 1
+                                if idx != curr: f.configure(fg_color=CARD_BG)
                             def on_click(e, idx=i): self.play_index(idx)
 
                             for w in [f_frame, img_label, t_label, a_label]:
-                                w.bind("<Enter>", on_enter)
-                                w.bind("<Leave>", on_leave)
+                                w.bind("<Enter>", lambda e, f=f_frame, idx=i: on_enter(e, f, idx))
+                                w.bind("<Leave>", lambda e, f=f_frame, idx=i: on_leave(e, f, idx))
                                 w.bind("<Button-1>", on_click)
 
                             # If it's still a placeholder but has a URL, start a background update
@@ -136,6 +146,7 @@ class QueueManager:
                     self.app.update_window_height()
                 finally:
                     self._loading_queue = False
+                    self.is_ui_ready = True
                     self.app.queue_refresh_btn.configure(text="refresh", state="normal")
 
             self.app.after(100, update_ui)
@@ -144,6 +155,26 @@ class QueueManager:
             print(f"Error loading UI queue: {e}")
             self._loading_queue = False
             self.app.after(0, lambda: self.app.queue_refresh_btn.configure(text="refresh", state="normal"))
+
+    def update_active_highlight(self):
+        """Quickly updates which track is highlighted as playing without a full reload."""
+        if not self.is_ui_ready or not hasattr(self.app, 'queue_list_frame'):
+            return
+
+        def update():
+            try:
+                track_info = self.app.controller.get_current_track_info(self.app.selected_group_uid)
+                current_pos = int(track_info.get('playlist_position', 0)) - 1
+                
+                for widget in self.app.queue_list_frame.winfo_children():
+                    if isinstance(widget, ctk.CTkFrame) and hasattr(widget, '_queue_index'):
+                        is_playing = (widget._queue_index == current_pos)
+                        new_color = ACTIVE_BLUE if is_playing else CARD_BG
+                        if widget.cget("fg_color") != new_color:
+                            widget.configure(fg_color=new_color)
+            except: pass
+
+        threading.Thread(target=update, daemon=True).start()
 
     def _get_headers(self):
         return {
