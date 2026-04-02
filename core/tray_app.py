@@ -20,6 +20,7 @@ from .sonos_queue import QueueManager
 # --- DPI SCALE FIX ---
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    scale_factor = (ctypes.windll.shcore.GetScaleFactorForDevice(0))/100
 except Exception:
     try:
         ctypes.windll.user32.SetProcessDPIAware()
@@ -593,8 +594,8 @@ class SonosTrayApp(ctk.CTk):
         self.update_idletasks()
         h = self.outer_frame.winfo_reqheight()
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-        x = sw - WINDOW_WIDTH - RIGHT_EDGE_OFFSET
-        y = sh - h - BOTTOM_EDGE_OFFSET
+        x = (sw - WINDOW_WIDTH - RIGHT_EDGE_OFFSET*scale_factor/1.25)
+        y = (sh - h - BOTTOM_EDGE_OFFSET*scale_factor/1.25)
         self.geometry(f"{WINDOW_WIDTH}x{int(h)}+{int(x)}+{int(y)}")
 
     def deiconify_with_fade(self):
