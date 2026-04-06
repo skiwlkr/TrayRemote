@@ -9,6 +9,7 @@ import os
 import xml.etree.ElementTree as ET
 import ctypes 
 import winreg
+import webbrowser
 
 from .sonos_controller import SonosController
 from .constants import *
@@ -159,6 +160,13 @@ class SonosTrayApp(ctk.CTk):
         self.track_label.pack(fill="x")
         self.artist_label = ctk.CTkLabel(txt_box, text="Loading...", font=ctk.CTkFont(size=13), anchor="w", wraplength=210, text_color="#bbbbbb", justify="left")
         self.artist_label.pack(fill="x")
+
+        # Service link button (initially hidden)
+        self.service_link_btn = ctk.CTkButton(inner_song, text="🔗", width=22, height=22, 
+                                             fg_color="transparent", hover_color="#2a2a2b",
+                                             font=ctk.CTkFont(size=14),
+                                             command=self.open_service_link)
+        self.current_service_url = None
 
         self.control_card = create_card(self.main_container)
         self.control_card.pack(side="top", fill="x", pady=(0, 8))
@@ -448,6 +456,7 @@ class SonosTrayApp(ctk.CTk):
                         "artist": self.get_all_artists(track_info),
                         "album_art": track_info.get('album_art'),
                         "track_uri": track_info.get('uri', ''),
+                        "service_link": self.controller.get_service_link(track_info),
                         "members": [{"name": m.player_name, "vol": m.volume, "mute": m.mute} for m in active_g.members]
                     }
 
@@ -481,6 +490,13 @@ class SonosTrayApp(ctk.CTk):
                             self.track_label.configure(text=ui_data["track_title"])
                             self.artist_label.configure(text=ui_data["artist"])
                             
+                            # Update service link button
+                            self.current_service_url = ui_data.get("service_link")
+                            if self.current_service_url:
+                                self.service_link_btn.place(relx=1.0, rely=1.0, x=-5, y=-5, anchor="se")
+                            else:
+                                self.service_link_btn.place_forget()
+
                             url = ui_data["album_art"]
                             is_radio = any(x in ui_data["track_uri"] for x in ['x-sonosapi-stream', 'x-rincon-mp3radio', 'x-rincon-mp3'])
                             
@@ -581,6 +597,10 @@ class SonosTrayApp(ctk.CTk):
             except Exception as e:
                 print(f"Control error: {e}")
         threading.Thread(target=t, daemon=True).start()
+
+    def open_service_link(self):
+        if self.current_service_url:
+            webbrowser.open(self.current_service_url)
 
     def play_favorite_action(self, fav):
         self.current_favorite_cover = fav.get('album_art')

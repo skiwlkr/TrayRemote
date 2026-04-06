@@ -2,7 +2,7 @@
 
 WINDOW_WIDTH = 380
 RIGHT_EDGE_OFFSET = 250
-BOTTOM_EDGE_OFFSET = 65
+BOTTOM_EDGE_OFFSET = 75
 BG_APP_OUTER = '#121212' # Darker base for glass tint
 CARD_BG = '#1e1e20'      # Slightly lighter for layered look
 CARD_BORDER = '#444444'  # Brighter border for glass edge effect
