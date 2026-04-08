@@ -8,6 +8,7 @@ Features
 - **Transparent UI:** New transparent, sleek design with interactive hover effects.
 - **Sonos Favorites:** Dedicated tab to quickly access and play your favorite radio stations or music on network drives.
 - **Queue functionality** Queue management directly through trayapp. 
+- **Spotify and AppleMusic links** A small link icon in the corner of the current playing song opens spotify/apple music. 
 - **Enhanced Favorites:** The Favorites tab now supports playback for Spotify and Apple Music (albums/tracks), as well as radio stations and network audio files.
 - **Settings & Discovery:** Added a new Settings tab featuring a "Rediscover Sonos Devices" mechanism.
 - **Automatic Discovery:** Seamlessly find Sonos devices on your local network.
