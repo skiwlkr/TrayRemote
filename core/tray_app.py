@@ -144,6 +144,8 @@ class SonosTrayApp(ctk.CTk):
         
         self.group_list_frame = ctk.CTkFrame(self.groups_inner_frame, fg_color="transparent")
         self.group_list_frame.pack(fill="x")
+        # Configure grid weights for proper resizing
+        self.group_list_frame.columnconfigure((0, 1, 2), weight=1)
 
         self.is_discovering = False # Track discovery state
 
@@ -465,10 +467,18 @@ class SonosTrayApp(ctk.CTk):
                         # 1. Groups UI
                         if len(self.group_list_frame.winfo_children()) != len(groups):
                             for w in self.group_list_frame.winfo_children(): w.destroy()
-                            for g in groups:
+                            # Configure grid layout for automatic row wrapping
+                            self.group_list_frame.columnconfigure((0, 1, 2), weight=1)
+                            for i, g in enumerate(groups):
                                 u_id = g.coordinator.uid
                                 btn = ctk.CTkButton(self.group_list_frame, text=g.coordinator.player_name, height=24, fg_color=ACTIVE_BLUE if u_id == self.selected_group_uid else BTN_DEFAULT, corner_radius=6, width=60, command=lambda u=u_id: self.select_group(u))
-                                btn._sonos_uid = u_id; btn.pack(side="left", padx=2)
+                                btn._sonos_uid = u_id
+                                # Use grid layout with 3 columns to wrap automatically
+                                col = i % 3
+                                row = i // 3
+                                btn.grid(row=row, column=col, padx=2, pady=2, sticky="ew")
+                            # Update layout after rebuilding group buttons
+                            self.group_list_frame.update_idletasks()
                         else:
                             for btn in self.group_list_frame.winfo_children():
                                 if hasattr(btn, '_sonos_uid'): btn.configure(fg_color=ACTIVE_BLUE if btn._sonos_uid == self.selected_group_uid else BTN_DEFAULT)
