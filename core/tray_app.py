@@ -9,6 +9,7 @@ import os
 import xml.etree.ElementTree as ET
 import ctypes 
 import winreg
+import webbrowser
 
 from .sonos_controller import SonosController
 from .constants import *
@@ -20,6 +21,7 @@ from .sonos_queue import QueueManager
 # --- DPI SCALE FIX ---
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    scale_factor = (ctypes.windll.shcore.GetScaleFactorForDevice(0))/100
 except Exception:
     try:
         ctypes.windll.user32.SetProcessDPIAware()
@@ -142,6 +144,8 @@ class SonosTrayApp(ctk.CTk):
         
         self.group_list_frame = ctk.CTkFrame(self.groups_inner_frame, fg_color="transparent")
         self.group_list_frame.pack(fill="x")
+        # Configure grid weights for proper resizing
+        self.group_list_frame.columnconfigure((0, 1, 2), weight=1)
 
         self.is_discovering = False # Track discovery state
 
@@ -158,6 +162,13 @@ class SonosTrayApp(ctk.CTk):
         self.track_label.pack(fill="x")
         self.artist_label = ctk.CTkLabel(txt_box, text="Loading...", font=ctk.CTkFont(size=13), anchor="w", wraplength=210, text_color="#bbbbbb", justify="left")
         self.artist_label.pack(fill="x")
+
+        # Service link button (initially hidden)
+        self.service_link_btn = ctk.CTkButton(inner_song, text="🔗", width=22, height=22, 
+                                             fg_color="transparent", hover_color="#2a2a2b",
+                                             font=ctk.CTkFont(size=14),
+                                             command=self.open_service_link)
+        self.current_service_url = None
 
         self.control_card = create_card(self.main_container)
         self.control_card.pack(side="top", fill="x", pady=(0, 8))
@@ -351,119 +362,197 @@ class SonosTrayApp(ctk.CTk):
         self.rebuild_dynamic_sections()
 
     def rebuild_dynamic_sections(self):
-        try:
-            groups = self.controller.get_all_groups()
-            active_g = next((g for g in groups if g.coordinator.uid == self.selected_group_uid), None)
-            if not active_g: return
-            for w in self.mixer_list_frame.winfo_children(): w.destroy()
-            self.room_vol_widgets.clear()
-            for p in active_g.members:
-                row = ctk.CTkFrame(self.mixer_list_frame, fg_color="transparent")
-                row.pack(fill='x', pady=2)
-                ctk.CTkLabel(row, text=p.player_name, width=80, anchor="w", font=ctk.CTkFont(size=12)).pack(side="left")
-                m_btn = ctk.CTkButton(row, text="🔇", width=32, height=32, fg_color="transparent", hover_color="#2a2a2b", font=ctk.CTkFont(size=18), command=lambda pl=p: self.toggle_mute(pl))
-                m_btn.pack(side="left", padx=(2, 8))
-                sld = ctk.CTkSlider(row, from_=0, to=100, height=14, command=lambda v, pl=p: self.set_vol(pl, v))
-                sld.set(p.volume); sld.pack(side="left", fill="x", expand=True)
-                self.room_vol_widgets[p.player_name] = {"slider": sld, "mute_btn": m_btn, "player": p}
-            for w in self.group_ui_list.winfo_children(): w.destroy()
-            all_p = self.controller.get_all_players()
-            for p in all_p:
-                is_in = any(m.uid == p.uid for m in active_g.members)
-                chk = ctk.CTkCheckBox(self.group_ui_list, text=p.player_name, variable=ctk.BooleanVar(value=is_in), command=lambda pl=p: self.toggle_group_membership(pl), font=ctk.CTkFont(size=12), checkbox_width=18, checkbox_height=18)
-                chk.pack(anchor='w', pady=2)
-            self.update_window_height()
-        except: pass
+        def t():
+            try:
+                groups = self.controller.get_all_groups()
+                active_g = next((g for g in groups if g.coordinator.uid == self.selected_group_uid), None)
+                if not active_g: return
+                
+                # Fetch volume and mute status in background
+                members_data = []
+                for p in active_g.members:
+                    members_data.append({
+                        "player": p,
+                        "name": p.player_name,
+                        "volume": p.volume,
+                        "mute": p.mute,
+                        "uid": p.uid
+                    })
+                
+                all_players = self.controller.get_all_players()
+                
+                def update_ui():
+                    try:
+                        for w in self.mixer_list_frame.winfo_children(): w.destroy()
+                        self.room_vol_widgets.clear()
+                        for data in members_data:
+                            p = data["player"]
+                            row = ctk.CTkFrame(self.mixer_list_frame, fg_color="transparent")
+                            row.pack(fill='x', pady=2)
+                            ctk.CTkLabel(row, text=data["name"], width=80, anchor="w", font=ctk.CTkFont(size=12)).pack(side="left")
+                            m_btn = ctk.CTkButton(row, text="🔇", width=32, height=32, fg_color="transparent", hover_color="#2a2a2b", font=ctk.CTkFont(size=18), command=lambda pl=p: self.toggle_mute(pl))
+                            m_btn.pack(side="left", padx=(2, 8))
+                            sld = ctk.CTkSlider(row, from_=0, to=100, height=14, command=lambda v, pl=p: self.set_vol(pl, v))
+                            sld.set(data["volume"]); sld.pack(side="left", fill="x", expand=True)
+                            m_btn.configure(text_color=MUTE_RED if data["mute"] else "#FFFFFF")
+                            self.room_vol_widgets[data["name"]] = {"slider": sld, "mute_btn": m_btn, "player": p}
+                        
+                        for w in self.group_ui_list.winfo_children(): w.destroy()
+                        for p in all_players:
+                            is_in = any(m.uid == p.uid for m in active_g.members)
+                            chk = ctk.CTkCheckBox(self.group_ui_list, text=p.player_name, variable=ctk.BooleanVar(value=is_in), command=lambda pl=p: self.toggle_group_membership(pl), font=ctk.CTkFont(size=12), checkbox_width=18, checkbox_height=18)
+                            chk.pack(anchor='w', pady=2)
+                        self.update_window_height()
+                    except: pass
+                
+                self.after(0, update_ui)
+            except Exception as e:
+                print(f"Rebuild Error: {e}")
+        threading.Thread(target=t, daemon=True).start()
 
     def update_status(self):
-        try:
-            # Handle discovery if no players are found
-            if not self.controller.players:
-                if not self.searching_label_visible:
-                    # Make the groups card more compact while searching
-                    self.groups_inner_frame.pack_configure(pady=4)
-                    self.searching_label.pack(side="top", pady=2)
-                    self.searching_label_visible = True
-                    self.update_window_height()
-                
-                if not self.is_discovering:
-                    self.is_discovering = True
-                    def do_discover():
+        def t():
+            try:
+                # Handle discovery if no players are found
+                if not self.controller.players:
+                    def show_searching():
+                        if not self.searching_label_visible:
+                            self.groups_inner_frame.pack_configure(pady=4)
+                            self.searching_label.pack(side="top", pady=2)
+                            self.searching_label_visible = True
+                            self.update_window_height()
+                    self.after(0, show_searching)
+                    
+                    if not self.is_discovering:
+                        self.is_discovering = True
                         self.controller.discover_players()
                         self.is_discovering = False
-                    threading.Thread(target=do_discover, daemon=True).start()
-                
-                self.after(5000, self.update_status)
-                return
+                    
+                    self.after(5000, self.update_status)
+                    return
 
-            # Players found, hide searching label if it was visible
-            if self.searching_label_visible:
-                self.searching_label.pack_forget()
-                # Restore original padding
-                self.groups_inner_frame.pack_configure(pady=8)
-                self.searching_label_visible = False
-                self.update_window_height()
+                # Fetch all network data in background thread
+                groups = self.controller.get_all_groups()
+                if not groups:
+                    self.after(2000, self.update_status)
+                    return
 
-            groups = self.controller.get_all_groups()
-            if not groups:
-                self.after(2000, self.update_status)
-                return
-            if not self.selected_group_uid:
-                self.selected_group_uid = groups[0].coordinator.uid
-                self.rebuild_dynamic_sections()
-            if len(self.group_list_frame.winfo_children()) != len(groups):
-                for w in self.group_list_frame.winfo_children(): w.destroy()
-                for g in groups:
-                    u_id = g.coordinator.uid
-                    btn = ctk.CTkButton(self.group_list_frame, text=g.coordinator.player_name, height=24, fg_color=ACTIVE_BLUE if u_id == self.selected_group_uid else BTN_DEFAULT, corner_radius=6, width=60, command=lambda u=u_id: self.select_group(u))
-                    btn._sonos_uid = u_id; btn.pack(side="left", padx=2)
-            else:
-                for btn in self.group_list_frame.winfo_children():
-                    if hasattr(btn, '_sonos_uid'): btn.configure(fg_color=ACTIVE_BLUE if btn._sonos_uid == self.selected_group_uid else BTN_DEFAULT)
-            active_g = next((g for g in groups if g.coordinator.uid == self.selected_group_uid), None)
-            if active_g:
-                state = active_g.coordinator.get_current_transport_info().get('current_transport_state', '')
-                self.play_btn.configure(
-                    fg_color=ACTIVE_BLUE if state == 'PLAYING' else BTN_DEFAULT,
-                    image=self.icons["pause"] if state == 'PLAYING' else self.icons["play"]
-                )
-                pm = active_g.coordinator.play_mode
-                is_shuffled = "SHUFFLE" in pm
-                is_repeat = pm in ["REPEAT_ALL", "REPEAT_ONE", "SHUFFLE", "SHUFFLE_REPEAT_ONE"]
-                
-                self.shuffle_btn.configure(fg_color=ACTIVE_BLUE if is_shuffled else "transparent")
-                self.repeat_btn.configure(fg_color=ACTIVE_BLUE if is_repeat else "transparent")
-                
-                track = active_g.coordinator.get_current_track_info()
-                track_title = track.get('title', 'Unknown')
-                track_uri = track.get('uri', '')
-                
-                self.track_label.configure(text=track_title)
-                self.artist_label.configure(text=self.get_all_artists(track))
-                
-                url = track.get('album_art')
-                is_radio = 'x-sonosapi-stream' in track_uri or 'x-rincon-mp3radio' in track_uri or 'x-rincon-mp3' in track_uri
-                
-                if is_radio and not url:
-                    if self.current_favorite_cover: url = self.current_favorite_cover
-                    elif track_title in self.favorite_covers: url = self.favorite_covers[track_title]
-                
-                if url != self.current_album_url:
-                    self.current_album_url = url
-                    if url: threading.Thread(target=self.favorites_mgr.load_art, args=(url, active_g.coordinator), daemon=True).start()
-                    else:
-                        self.after(0, lambda: self.cover_label.configure(image=None))
-                        self._current_cover = None
-                
-                for name, w in self.room_vol_widgets.items():
-                    p_fresh = next((m for m in active_g.members if m.player_name == name), w["player"])
-                    w["slider"].set(p_fresh.volume); w["mute_btn"].configure(text_color=MUTE_RED if p_fresh.mute else "#FFFFFF")
-                
-                # Check if grouping changed (member count mismatch)
-                if len(self.room_vol_widgets) != len(active_g.members):
+                # Choose selected group
+                if not self.selected_group_uid:
+                    self.selected_group_uid = groups[0].coordinator.uid
                     self.rebuild_dynamic_sections()
-        except: pass
-        self.after(2000, self.update_status)
+                
+                active_g = next((g for g in groups if g.coordinator.uid == self.selected_group_uid), None)
+                ui_data = {}
+                
+                if active_g:
+                    # Parallel fetch for common info
+                    transport_info = active_g.coordinator.get_current_transport_info()
+                    track_info = active_g.coordinator.get_current_track_info()
+                    play_mode = active_g.coordinator.play_mode
+                    
+                    ui_data = {
+                        "state": transport_info.get('current_transport_state', ''),
+                        "play_mode": play_mode,
+                        "track_title": track_info.get('title', 'Unknown'),
+                        "artist": self.get_all_artists(track_info),
+                        "album_art": track_info.get('album_art'),
+                        "track_uri": track_info.get('uri', ''),
+                        "service_link": self.controller.get_service_link(track_info),
+                        "members": [{"name": m.player_name, "vol": m.volume, "mute": m.mute} for m in active_g.members]
+                    }
+
+                def update_ui():
+                    try:
+                        # 1. Groups UI
+                        if len(self.group_list_frame.winfo_children()) != len(groups):
+                            for w in self.group_list_frame.winfo_children(): w.destroy()
+                            # Configure grid layout for automatic row wrapping
+                            self.group_list_frame.columnconfigure((0, 1, 2), weight=1)
+                            for i, g in enumerate(groups):
+                                u_id = g.coordinator.uid
+                                btn = ctk.CTkButton(self.group_list_frame, text=g.coordinator.player_name, height=24, fg_color=ACTIVE_BLUE if u_id == self.selected_group_uid else BTN_DEFAULT, corner_radius=6, width=60, command=lambda u=u_id: self.select_group(u))
+                                btn._sonos_uid = u_id
+                                # Use grid layout with 3 columns to wrap automatically
+                                col = i % 3
+                                row = i // 3
+                                btn.grid(row=row, column=col, padx=2, pady=2, sticky="ew")
+                            # Update layout after rebuilding group buttons
+                            self.group_list_frame.update_idletasks()
+                        else:
+                            for btn in self.group_list_frame.winfo_children():
+                                if hasattr(btn, '_sonos_uid'): btn.configure(fg_color=ACTIVE_BLUE if btn._sonos_uid == self.selected_group_uid else BTN_DEFAULT)
+
+                        # 2. Player Controls & Track Info
+                        if ui_data:
+                            state = ui_data["state"]
+                            self.play_btn.configure(
+                                fg_color=ACTIVE_BLUE if state == 'PLAYING' else BTN_DEFAULT,
+                                image=self.icons["pause"] if state == 'PLAYING' else self.icons["play"]
+                            )
+                            pm = ui_data["play_mode"]
+                            is_shuffled = "SHUFFLE" in pm
+                            is_repeat = pm in ["REPEAT_ALL", "REPEAT_ONE", "SHUFFLE", "SHUFFLE_REPEAT_ONE"]
+                            
+                            self.shuffle_btn.configure(fg_color=ACTIVE_BLUE if is_shuffled else "transparent")
+                            self.repeat_btn.configure(fg_color=ACTIVE_BLUE if is_repeat else "transparent")
+                            
+                            self.track_label.configure(text=ui_data["track_title"])
+                            self.artist_label.configure(text=ui_data["artist"])
+                            
+                            # Update service link button
+                            self.current_service_url = ui_data.get("service_link")
+                            if self.current_service_url:
+                                self.service_link_btn.place(relx=1.0, rely=1.0, x=-5, y=-5, anchor="se")
+                            else:
+                                self.service_link_btn.place_forget()
+
+                            url = ui_data["album_art"]
+                            is_radio = any(x in ui_data["track_uri"] for x in ['x-sonosapi-stream', 'x-rincon-mp3radio', 'x-rincon-mp3'])
+                            
+                            if is_radio and not url:
+                                if self.current_favorite_cover: url = self.current_favorite_cover
+                                elif ui_data["track_title"] in self.favorite_covers: url = self.favorite_covers[ui_data["track_title"]]
+                            
+                            if url != self.current_album_url:
+                                self.current_album_url = url
+                                if url: threading.Thread(target=self.favorites_mgr.load_art, args=(url, active_g.coordinator), daemon=True).start()
+                                else:
+                                    self.cover_label.configure(image=None)
+                                    self._current_cover = None
+                            
+                            # 3. Volume Mixers
+                            for m_data in ui_data["members"]:
+                                name = m_data["name"]
+                                if name in self.room_vol_widgets:
+                                    w = self.room_vol_widgets[name]
+                                    w["slider"].set(m_data["vol"])
+                                    w["mute_btn"].configure(text_color=MUTE_RED if m_data["mute"] else "#FFFFFF")
+                            
+                            # 4. Grouping Sync
+                            if len(self.room_vol_widgets) != len(ui_data["members"]):
+                                self.rebuild_dynamic_sections()
+                            
+                            # 5. Queue highlight update if visible
+                            if self.queue_container.winfo_viewable():
+                                self.queue_mgr.update_active_highlight()
+
+                        # 6. Hide searching label if it was visible
+                        if self.searching_label_visible:
+                            self.searching_label.pack_forget()
+                            self.groups_inner_frame.pack_configure(pady=8)
+                            self.searching_label_visible = False
+                            self.update_window_height()
+                    except Exception as e: print(f"UI Update error: {e}")
+
+                self.after(0, update_ui)
+                self.after(2000, self.update_status)
+            except Exception as e:
+                print(f"Status Thread Error: {e}")
+                self.after(2000, self.update_status)
+
+        threading.Thread(target=t, daemon=True).start()
+
 
     def get_all_artists(self, track_info):
         artists = [track_info.get('artist', '')]
@@ -519,6 +608,10 @@ class SonosTrayApp(ctk.CTk):
                 print(f"Control error: {e}")
         threading.Thread(target=t, daemon=True).start()
 
+    def open_service_link(self):
+        if self.current_service_url:
+            webbrowser.open(self.current_service_url)
+
     def play_favorite_action(self, fav):
         self.current_favorite_cover = fav.get('album_art')
         threading.Thread(target=lambda: self.controller.play_favorite(fav, self.selected_group_uid), daemon=True).start()
@@ -531,8 +624,8 @@ class SonosTrayApp(ctk.CTk):
         self.update_idletasks()
         h = self.outer_frame.winfo_reqheight()
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
-        x = sw - WINDOW_WIDTH - RIGHT_EDGE_OFFSET
-        y = sh - h - BOTTOM_EDGE_OFFSET
+        x = (sw - WINDOW_WIDTH - RIGHT_EDGE_OFFSET*scale_factor/1.25)
+        y = (sh - h - BOTTOM_EDGE_OFFSET*scale_factor/1.25)
         self.geometry(f"{WINDOW_WIDTH}x{int(h)}+{int(x)}+{int(y)}")
 
     def deiconify_with_fade(self):

@@ -77,9 +77,19 @@ class FavoritesManager:
                     
                     if not favs:
                         ctk.CTkLabel(self.app.fav_list_frame, text="No favorites found.", text_color="gray").pack(pady=20)
-                    else:
-                        print(f"[FAV] Rebuilding UI with {len(favs)} favorites")
-                        for fav in favs:
+                        self.app._loading_favs = False
+                        self.app.refresh_btn.configure(text="refresh", state="normal")
+                        self.app.update_window_height()
+                        return
+
+                    print(f"[FAV] Rebuilding UI with {len(favs)} favorites")
+                    
+                    def create_batch(start_idx):
+                        if not self.app.fav_list_frame.winfo_exists(): return
+                        
+                        end_idx = min(start_idx + 8, len(favs))
+                        for i in range(start_idx, end_idx):
+                            fav = favs[i]
                             title = fav.get('title', 'Unknown')
                             f_frame = ctk.CTkFrame(self.app.fav_list_frame, fg_color="transparent")
                             f_frame.pack(fill="x", pady=2)
@@ -99,11 +109,20 @@ class FavoritesManager:
                                 art_url = fav.get('album_art') or self.app.favorite_covers.get(title)
                                 if art_url:
                                     threading.Thread(target=self.load_fav_art, args=(btn, art_url, title), daemon=True).start()
-                    
-                    self.app.update_window_height()
-                finally:
+                        
+                        if end_idx < len(favs):
+                            self.app.after(5, lambda: create_batch(end_idx))
+                        else:
+                            self.app._loading_favs = False
+                            self.app.refresh_btn.configure(text="refresh", state="normal")
+                            self.app.update_window_height()
+
+                    create_batch(0)
+                except Exception as e:
+                    print(f"Fav UI Update error: {e}")
                     self.app._loading_favs = False
                     self.app.refresh_btn.configure(text="refresh", state="normal")
+
 
             # Final transition back to the list
             if animate:

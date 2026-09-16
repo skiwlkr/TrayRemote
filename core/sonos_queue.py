@@ -92,8 +92,19 @@ class QueueManager:
                     
                     if not queue:
                         ctk.CTkLabel(self.app.queue_list_frame, text="Queue is empty.", text_color="gray").pack(pady=20)
-                    else:
-                        for i, track in enumerate(queue):
+                        self._loading_queue = False
+                        self.is_ui_ready = True
+                        self.app.queue_refresh_btn.configure(text="refresh", state="normal")
+                        self.app.update_window_height()
+                        return
+
+                    def create_batch(start_idx):
+                        if not hasattr(self.app, 'queue_list_frame') or not self.app.queue_list_frame.winfo_exists():
+                            return
+
+                        end_idx = min(start_idx + 8, len(queue), 50) # Increased to 8 but still batched
+                        for i in range(start_idx, end_idx):
+                            track = queue[i]
                             raw_title, raw_artist = self._get_track_info(track)
                             title = self._truncate(raw_title)
                             artist = self._truncate(raw_artist)
@@ -103,7 +114,7 @@ class QueueManager:
                             bg_color = ACTIVE_BLUE if is_playing else CARD_BG
                             
                             f_frame = ctk.CTkFrame(self.app.queue_list_frame, fg_color=bg_color, height=60, corner_radius=8, border_width=1, border_color=CARD_BORDER)
-                            f_frame._queue_index = i # Store index for highlighting
+                            f_frame._queue_index = i
                             f_frame.pack(fill="x", pady=3, padx=2)
                             f_frame.pack_propagate(False)
                             
@@ -121,7 +132,6 @@ class QueueManager:
                             a_label.place(relx=0, rely=0.65, x=60, anchor="w")
 
                             def on_enter(e, f=f_frame, idx=i): 
-                                # Use current_pos logic here too
                                 track_info = self.app.controller.get_current_track_info(self.app.selected_group_uid)
                                 curr = int(track_info.get('playlist_position', 0)) - 1
                                 if idx != curr: f.configure(fg_color=ACTIVE_BLUE)
@@ -136,18 +146,27 @@ class QueueManager:
                                 w.bind("<Leave>", lambda e, f=f_frame, idx=i: on_leave(e, f, idx))
                                 w.bind("<Button-1>", on_click)
 
-                            # If it's still a placeholder but has a URL, start a background update
                             if display_img == self.placeholder_img and art_url:
                                 threading.Thread(target=self._load_and_update_label, args=(img_label, art_url), daemon=True).start()
-                    
-                    if len(queue) >= 50:
-                         ctk.CTkLabel(self.app.queue_list_frame, text="Showing first 50 tracks", text_color="gray").pack(pady=5)
 
-                    self.app.update_window_height()
-                finally:
+                        if end_idx < min(len(queue), 50):
+                            self.app.after(5, lambda: create_batch(end_idx))
+                        else:
+                            if len(queue) >= 50:
+                                 ctk.CTkLabel(self.app.queue_list_frame, text="Showing first 50 tracks", text_color="gray").pack(pady=5)
+                            
+                            self._loading_queue = False
+                            self.is_ui_ready = True
+                            self.app.queue_refresh_btn.configure(text="refresh", state="normal")
+                            # Update height at the very end
+                            self.app.update_window_height()
+
+                    create_batch(0)
+                except Exception as e:
+                    print(f"Update UI error: {e}")
                     self._loading_queue = False
-                    self.is_ui_ready = True
                     self.app.queue_refresh_btn.configure(text="refresh", state="normal")
+
 
             self.app.after(100, update_ui)
                 

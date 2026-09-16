@@ -175,6 +175,58 @@ class SonosController:
             print(f"Error getting track info: {e}")
             return {}
 
+    def get_service_link(self, track_info):
+        """Extracts a Spotify or Apple Music web link from track info."""
+        uri = track_info.get('uri', '')
+        if not uri:
+            return None
+        
+        lower_uri = uri.lower()
+        
+        # --- SPOTIFY ---
+        if 'spotify' in lower_uri:
+            try:
+                unquoted = urllib.parse.unquote(uri)
+                parts = unquoted.split(':')
+                if 'track' in parts:
+                    track_id = parts[parts.index('track') + 1].split('?')[0]
+                    return f"https://open.spotify.com/track/{track_id}"
+                elif 'album' in parts:
+                    album_id = parts[parts.index('album') + 1].split('?')[0]
+                    return f"https://open.spotify.com/album/{album_id}"
+            except Exception as e:
+                print(f"Error parsing Spotify URI: {e}")
+
+        # --- APPLE MUSIC ---
+        if 'apple' in lower_uri and ('music' in lower_uri or 'sid=204' in lower_uri):
+            try:
+                # Apple Music URI example: x-sonos-http:song%3a1440860527.mp4?sid=204
+                unquoted = urllib.parse.unquote(uri)
+                # Look for song:ID or album:ID
+                if 'song:' in unquoted:
+                    song_id = unquoted.split('song:')[1].split('.')[0].split('?')[0]
+                    return f"https://music.apple.com/song/{song_id}"
+                elif 'album:' in unquoted:
+                    album_id = unquoted.split('album:')[1].split('.')[0].split('?')[0]
+                    return f"https://music.apple.com/album/{album_id}"
+            except Exception as e:
+                print(f"Error parsing Apple Music URI: {e}")
+
+        # --- FALLBACK: Search Link ---
+        # If it's not a service URI we know, or it failed, we could return a search link
+        # But only if it's likely a song (not radio)
+        is_radio = any(x in lower_uri for x in ['x-sonosapi-stream', 'x-rincon-mp3radio', 'x-rincon-mp3', 'tunein'])
+        if not is_radio:
+            title = track_info.get('title', '')
+            artist = track_info.get('artist', '')
+            if title and artist:
+                query = urllib.parse.quote(f"{title} {artist}")
+                # Use Spotify search by default if we want, or just return None if we only want direct links
+                # Let's return None for now to avoid noisy buttons on every track
+                return None
+        
+        return None
+
     def play_favorite(self, fav_data, group_uid=None):
         """Plays favorites using robust methods for radio streams and music services."""
         target = self.device
